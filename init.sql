@@ -18,6 +18,7 @@ CREATE TABLE auth_schema.users (
     email VARCHAR(150) UNIQUE NOT NULL,
     password_hash VARCHAR(255),
     phone VARCHAR(20),
+    avatar_url TEXT,
     role auth_schema.user_role NOT NULL DEFAULT 'CLIENTE',
     provider auth_schema.auth_provider NOT NULL DEFAULT 'LOCAL',
     enabled BOOLEAN NOT NULL DEFAULT TRUE,

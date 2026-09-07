@@ -18,6 +18,7 @@ public class UserSummaryDto {
     private String fullName;
     private String email;
     private String phone;
+    private String avatarUrl;
     private UserRole role;
     private AuthProvider provider;
     private boolean enabled;
