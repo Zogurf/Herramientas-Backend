@@ -1,0 +1,294 @@
+{
+  "communities": {
+    "0": [
+      "config_customuserdetailsservice",
+      "config_customuserdetailsservice_customuserdetailsservice",
+      "config_customuserdetailsservice_customuserdetailsservice_loaduserbyusername",
+      "config_jwtauthenticationfilter",
+      "config_jwtauthenticationfilter_jwtauthenticationfilter",
+      "config_jwtauthenticationfilter_jwtauthenticationfilter_dofilterinternal",
+      "config_jwtauthenticationfilter_jwtauthenticationfilter_getjwtfromrequest",
+      "filterchain",
+      "httpservletrequest",
+      "httpservletresponse",
+      "onceperrequestfilter",
+      "src_main_java_com_logistics_proyect_group5_config_customuserdetailsservice_java_override",
+      "src_main_java_com_logistics_proyect_group5_config_customuserdetailsservice_java_string",
+      "src_main_java_com_logistics_proyect_group5_config_customuserdetailsservice_java_userdetails",
+      "src_main_java_com_logistics_proyect_group5_config_jwtauthenticationfilter_java_override",
+      "src_main_java_com_logistics_proyect_group5_config_jwtauthenticationfilter_java_string",
+      "userdetailsservice"
+    ],
+    "1": [
+      "collection",
+      "grantedauthority",
+      "model_user",
+      "model_user_user",
+      "model_user_user_getauthorities",
+      "model_user_user_getusername",
+      "model_user_user_isaccountnonexpired",
+      "model_user_user_isaccountnonlocked",
+      "model_user_user_iscredentialsnonexpired",
+      "model_user_user_isenabled",
+      "model_user_user_oncreate",
+      "model_user_user_onupdate",
+      "prepersist",
+      "preupdate",
+      "src_main_java_com_logistics_proyect_group5_model_user_java_override",
+      "src_main_java_com_logistics_proyect_group5_model_user_java_string"
+    ],
+    "2": [
+      "badcredentialsexception",
+      "exception",
+      "exception_globalexceptionhandler",
+      "exception_globalexceptionhandler_globalexceptionhandler",
+      "exception_globalexceptionhandler_globalexceptionhandler_handlebadcredentials",
+      "exception_globalexceptionhandler_globalexceptionhandler_handlegenericexception",
+      "exception_globalexceptionhandler_globalexceptionhandler_handleillegalargument",
+      "exception_globalexceptionhandler_globalexceptionhandler_handlevalidationexceptions",
+      "exceptionhandler",
+      "illegalargumentexception",
+      "map",
+      "methodargumentnotvalidexception",
+      "object",
+      "src_main_java_com_logistics_proyect_group5_exception_globalexceptionhandler_java_responseentity",
+      "src_main_java_com_logistics_proyect_group5_exception_globalexceptionhandler_java_string"
+    ],
+    "3": [
+      "controller_authcontroller",
+      "controller_authcontroller_authcontroller",
+      "controller_authcontroller_authcontroller_getcurrentuser",
+      "controller_authcontroller_authcontroller_login",
+      "controller_authcontroller_authcontroller_register",
+      "getmapping",
+      "postmapping",
+      "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_authresponse",
+      "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_loginrequest",
+      "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_registerrequest",
+      "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_responseentity",
+      "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_user",
+      "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_usersummarydto"
+    ],
+    "4": [
+      "authentication",
+      "config_jwttokenprovider",
+      "config_jwttokenprovider_jwttokenprovider",
+      "config_jwttokenprovider_jwttokenprovider_generatetoken",
+      "config_jwttokenprovider_jwttokenprovider_generatetokenfromuser",
+      "config_jwttokenprovider_jwttokenprovider_getemailfromtoken",
+      "config_jwttokenprovider_jwttokenprovider_getsigningkey",
+      "config_jwttokenprovider_jwttokenprovider_validatetoken",
+      "secretkey",
+      "src_main_java_com_logistics_proyect_group5_config_jwttokenprovider_java_string",
+      "src_main_java_com_logistics_proyect_group5_config_jwttokenprovider_java_user"
+    ],
+    "5": [
+      "service_authservice",
+      "service_authservice_authservice",
+      "service_authservice_authservice_login",
+      "service_authservice_authservice_maptousersummarydto",
+      "service_authservice_authservice_register",
+      "src_main_java_com_logistics_proyect_group5_service_authservice_java_authresponse",
+      "src_main_java_com_logistics_proyect_group5_service_authservice_java_loginrequest",
+      "src_main_java_com_logistics_proyect_group5_service_authservice_java_registerrequest",
+      "src_main_java_com_logistics_proyect_group5_service_authservice_java_user",
+      "src_main_java_com_logistics_proyect_group5_service_authservice_java_usersummarydto"
+    ],
+    "6": [
+      "authenticationconfiguration",
+      "authenticationmanager",
+      "config_passwordencoderconfig",
+      "config_passwordencoderconfig_passwordencoderconfig",
+      "config_passwordencoderconfig_passwordencoderconfig_authenticationmanager",
+      "config_passwordencoderconfig_passwordencoderconfig_passwordencoder",
+      "passwordencoder",
+      "src_main_java_com_logistics_proyect_group5_config_passwordencoderconfig_java_bean"
+    ],
+    "7": [
+      "config_securityconfig",
+      "config_securityconfig_securityconfig",
+      "config_securityconfig_securityconfig_corsconfigurationsource",
+      "config_securityconfig_securityconfig_securityfilterchain",
+      "corsconfigurationsource",
+      "httpsecurity",
+      "securityfilterchain",
+      "src_main_java_com_logistics_proyect_group5_config_securityconfig_java_bean"
+    ],
+    "8": [
+      "optional",
+      "repository_userrepository",
+      "repository_userrepository_userrepository",
+      "repository_userrepository_userrepository_existsbyemail",
+      "repository_userrepository_userrepository_findbyemail",
+      "src_main_java_com_logistics_proyect_group5_repository_userrepository_java_string",
+      "src_main_java_com_logistics_proyect_group5_repository_userrepository_java_user"
+    ],
+    "9": [
+      "application_yml_app",
+      "docker_compose_pgadmin",
+      "docker_compose_postgres",
+      "help_spring_data_jpa"
+    ],
+    "10": [
+      "group5_application",
+      "group5_application_application",
+      "group5_application_application_main",
+      "src_main_java_com_logistics_proyect_group5_application_java_string"
+    ],
+    "11": [
+      "group5_applicationtests",
+      "group5_applicationtests_applicationtests",
+      "group5_applicationtests_applicationtests_contextloads",
+      "test"
+    ],
+    "12": [
+      "dto_authresponse",
+      "dto_authresponse_authresponse"
+    ],
+    "13": [
+      "dto_loginrequest",
+      "dto_loginrequest_loginrequest"
+    ],
+    "14": [
+      "dto_registerrequest",
+      "dto_registerrequest_registerrequest"
+    ],
+    "15": [
+      "dto_usersummarydto",
+      "dto_usersummarydto_usersummarydto"
+    ],
+    "16": [
+      "help_apache_maven"
+    ],
+    "17": [
+      "help_spring_boot_maven_plugin"
+    ],
+    "18": [
+      "help_spring_security"
+    ],
+    "19": [
+      "help_spring_web"
+    ],
+    "20": [
+      "model_authprovider"
+    ],
+    "21": [
+      "model_userrole"
+    ]
+  },
+  "cohesion": {
+    "0": 0.19117647058823528,
+    "1": 0.18333333333333332,
+    "2": 0.3238095238095238,
+    "3": 0.28205128205128205,
+    "4": 0.36363636363636365,
+    "5": 0.4222222222222222,
+    "6": 0.42857142857142855,
+    "7": 0.4642857142857143,
+    "8": 0.42857142857142855,
+    "9": 0.5,
+    "10": 0.5,
+    "11": 0.6666666666666666,
+    "12": 1.0,
+    "13": 1.0,
+    "14": 1.0,
+    "15": 1.0,
+    "16": 1.0,
+    "17": 1.0,
+    "18": 1.0,
+    "19": 1.0,
+    "20": 1.0,
+    "21": 1.0
+  },
+  "gods": [
+    {
+      "id": "model_user_user",
+      "label": "User",
+      "degree": 10
+    },
+    {
+      "id": "config_jwttokenprovider_jwttokenprovider",
+      "label": "JwtTokenProvider",
+      "degree": 6
+    },
+    {
+      "id": "src_main_java_com_logistics_proyect_group5_model_user_java_override",
+      "label": "Override",
+      "degree": 6
+    },
+    {
+      "id": "src_main_java_com_logistics_proyect_group5_config_customuserdetailsservice_java_userdetails",
+      "label": "UserDetails",
+      "degree": 5
+    },
+    {
+      "id": "exception_globalexceptionhandler_globalexceptionhandler",
+      "label": "GlobalExceptionHandler",
+      "degree": 5
+    },
+    {
+      "id": "src_main_java_com_logistics_proyect_group5_exception_globalexceptionhandler_java_responseentity",
+      "label": "ResponseEntity",
+      "degree": 5
+    },
+    {
+      "id": "map",
+      "label": "Map",
+      "degree": 5
+    },
+    {
+      "id": "exceptionhandler",
+      "label": "ExceptionHandler",
+      "degree": 5
+    },
+    {
+      "id": "config_jwtauthenticationfilter_jwtauthenticationfilter",
+      "label": "JwtAuthenticationFilter",
+      "degree": 4
+    },
+    {
+      "id": "src_main_java_com_logistics_proyect_group5_config_jwttokenprovider_java_string",
+      "label": "String",
+      "degree": 4
+    }
+  ],
+  "surprises": [
+    {
+      "source": "proyect.group5",
+      "target": "Spring Data JPA",
+      "source_files": [
+        "src/main/resources/application.yml",
+        "HELP.md"
+      ],
+      "confidence": "INFERRED",
+      "relation": "conceptually_related_to",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories"
+    },
+    {
+      "source": "proyect.group5",
+      "target": "PostgreSQL Service",
+      "source_files": [
+        "src/main/resources/application.yml",
+        "docker-compose.yml"
+      ],
+      "confidence": "INFERRED",
+      "relation": "shares_data_with",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories"
+    },
+    {
+      "source": "User",
+      "target": "UserDetails",
+      "source_files": [
+        "src/main/java/com/logistics/proyect/group5/model/User.java",
+        "src/main/java/com/logistics/proyect/group5/config/CustomUserDetailsService.java"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "implements",
+      "why": "bridges separate communities"
+    }
+  ],
+  "tokens": {
+    "input": 1920,
+    "output": 1226
+  }
+}

@@ -32,6 +32,11 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout() {
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping("/me")
     public ResponseEntity<UserSummaryDto> getCurrentUser(@AuthenticationPrincipal User currentUser) {
         if (currentUser == null) {
