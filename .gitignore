@@ -3,6 +3,10 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+# test
+graphify-out/
+stitch_*/
+
 ### IDE ###
 .idea
 .classpath
