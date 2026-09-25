@@ -574,10 +574,30 @@
       "norm_label": "registerrequest"
     },
     {
-      "label": ".getCurrentUser()",
+      "label": ".logout()",
       "file_type": "code",
       "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
       "source_location": "L35",
+      "_origin": "ast",
+      "id": "controller_authcontroller_authcontroller_logout",
+      "community": 3,
+      "norm_label": ".logout()"
+    },
+    {
+      "label": "Void",
+      "file_type": "code",
+      "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
+      "source_location": "L35",
+      "_origin": "ast",
+      "id": "void",
+      "community": 3,
+      "norm_label": "void"
+    },
+    {
+      "label": ".getCurrentUser()",
+      "file_type": "code",
+      "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
+      "source_location": "L40",
       "_origin": "ast",
       "id": "controller_authcontroller_authcontroller_getcurrentuser",
       "community": 3,
@@ -587,7 +607,7 @@
       "label": "User",
       "file_type": "code",
       "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
-      "source_location": "L35",
+      "source_location": "L40",
       "_origin": "ast",
       "id": "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_user",
       "community": 3,
@@ -597,7 +617,7 @@
       "label": "UserSummaryDto",
       "file_type": "code",
       "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
-      "source_location": "L35",
+      "source_location": "L40",
       "_origin": "ast",
       "id": "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_usersummarydto",
       "community": 3,
@@ -607,7 +627,7 @@
       "label": "GetMapping",
       "file_type": "code",
       "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
-      "source_location": "L35",
+      "source_location": "L40",
       "_origin": "ast",
       "id": "getmapping",
       "community": 3,
@@ -850,7 +870,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "model_authprovider",
-      "community": 20,
+      "community": 17,
       "norm_label": "authprovider.java"
     },
     {
@@ -1020,7 +1040,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "model_userrole",
-      "community": 21,
+      "community": 18,
       "norm_label": "userrole.java"
     },
     {
@@ -1234,73 +1254,47 @@
       "norm_label": "test"
     },
     {
-      "label": "Apache Maven",
-      "file_type": "concept",
+      "label": "Getting Started Documentation",
+      "file_type": "document",
       "source_file": "HELP.md",
       "source_location": null,
-      "source_url": "https://maven.apache.org/guides/index.html",
+      "source_url": null,
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "id": "help_apache_maven",
+      "id": "help_documentation",
       "community": 16,
-      "norm_label": "apache maven"
+      "norm_label": "getting started documentation"
     },
     {
-      "label": "Spring Boot Maven Plugin",
-      "file_type": "concept",
-      "source_file": "HELP.md",
+      "label": "Herramientas-Backend README",
+      "file_type": "document",
+      "source_file": "README.md",
       "source_location": null,
-      "source_url": "https://docs.spring.io/spring-boot/4.1.1/maven-plugin",
+      "source_url": null,
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "id": "help_spring_boot_maven_plugin",
-      "community": 17,
-      "norm_label": "spring boot maven plugin"
-    },
-    {
-      "label": "Spring Web",
-      "file_type": "concept",
-      "source_file": "HELP.md",
-      "source_location": null,
-      "source_url": "https://docs.spring.io/spring-boot/4.1.1/reference/web/servlet.html",
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "help_spring_web",
+      "id": "readme_documentation",
       "community": 19,
-      "norm_label": "spring web"
+      "norm_label": "herramientas-backend readme"
     },
     {
-      "label": "Spring Security",
-      "file_type": "concept",
-      "source_file": "HELP.md",
+      "label": "Docker Compose Configuration",
+      "file_type": "code",
+      "source_file": "docker-compose.yml",
       "source_location": null,
-      "source_url": "https://docs.spring.io/spring-boot/4.1.1/reference/web/spring-security.html",
+      "source_url": null,
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "id": "help_spring_security",
-      "community": 18,
-      "norm_label": "spring security"
-    },
-    {
-      "label": "Spring Data JPA",
-      "file_type": "concept",
-      "source_file": "HELP.md",
-      "source_location": null,
-      "source_url": "https://docs.spring.io/spring-boot/4.1.1/reference/data/sql.html#data.sql.jpa-and-spring-data",
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "help_spring_data_jpa",
+      "id": "docker_compose_config",
       "community": 9,
-      "norm_label": "spring data jpa"
+      "norm_label": "docker compose configuration"
     },
     {
       "label": "PostgreSQL Service",
-      "file_type": "code",
+      "file_type": "concept",
       "source_file": "docker-compose.yml",
       "source_location": null,
       "source_url": null,
@@ -1313,7 +1307,7 @@
     },
     {
       "label": "pgAdmin Service",
-      "file_type": "code",
+      "file_type": "concept",
       "source_file": "docker-compose.yml",
       "source_location": null,
       "source_url": null,
@@ -1325,7 +1319,7 @@
       "norm_label": "pgadmin service"
     },
     {
-      "label": "proyect.group5",
+      "label": "Spring Application Configuration",
       "file_type": "code",
       "source_file": "src/main/resources/application.yml",
       "source_location": null,
@@ -1333,9 +1327,22 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "id": "application_yml_app",
+      "id": "application_yml_config",
       "community": 9,
-      "norm_label": "proyect.group5"
+      "norm_label": "spring application configuration"
+    },
+    {
+      "label": "PostgreSQL Datasource",
+      "file_type": "concept",
+      "source_file": "src/main/resources/application.yml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "application_yml_datasource",
+      "community": 9,
+      "norm_label": "postgresql datasource"
     }
   ],
   "links": [
@@ -2332,7 +2339,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
-      "source_location": "L35",
+      "source_location": "L40",
       "weight": 1.0,
       "source": "controller_authcontroller_authcontroller",
       "target": "controller_authcontroller_authcontroller_getcurrentuser",
@@ -2346,6 +2353,16 @@
       "weight": 1.0,
       "source": "controller_authcontroller_authcontroller",
       "target": "controller_authcontroller_authcontroller_login",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
+      "source_location": "L35",
+      "weight": 1.0,
+      "source": "controller_authcontroller_authcontroller",
+      "target": "controller_authcontroller_authcontroller_logout",
       "confidence_score": 1.0
     },
     {
@@ -2406,10 +2423,21 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
-      "source_location": "L35",
+      "source_location": "L40",
       "weight": 1.0,
       "context": "return_type",
       "source": "controller_authcontroller_authcontroller_getcurrentuser",
+      "target": "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_responseentity",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
+      "source_location": "L35",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "controller_authcontroller_authcontroller_logout",
       "target": "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_responseentity",
       "confidence_score": 1.0
     },
@@ -2433,6 +2461,17 @@
       "context": "generic_arg",
       "source": "controller_authcontroller_authcontroller_register",
       "target": "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_authresponse",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
+      "source_location": "L35",
+      "weight": 1.0,
+      "context": "attribute",
+      "source": "controller_authcontroller_authcontroller_logout",
+      "target": "postmapping",
       "confidence_score": 1.0
     },
     {
@@ -2463,6 +2502,17 @@
       "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
       "source_location": "L35",
       "weight": 1.0,
+      "context": "generic_arg",
+      "source": "controller_authcontroller_authcontroller_logout",
+      "target": "void",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
+      "source_location": "L40",
+      "weight": 1.0,
       "context": "attribute",
       "source": "controller_authcontroller_authcontroller_getcurrentuser",
       "target": "getmapping",
@@ -2474,7 +2524,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.8,
       "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
-      "source_location": "L40",
+      "source_location": "L45",
       "weight": 1.0,
       "source": "controller_authcontroller_authcontroller_getcurrentuser",
       "target": "service_authservice_authservice_maptousersummarydto"
@@ -2483,7 +2533,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
-      "source_location": "L35",
+      "source_location": "L40",
       "weight": 1.0,
       "context": "parameter_type",
       "source": "controller_authcontroller_authcontroller_getcurrentuser",
@@ -2494,7 +2544,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "src/main/java/com/logistics/proyect/group5/controller/AuthController.java",
-      "source_location": "L35",
+      "source_location": "L40",
       "weight": 1.0,
       "context": "generic_arg",
       "source": "controller_authcontroller_authcontroller_getcurrentuser",
@@ -3509,23 +3559,33 @@
       "confidence_score": 1.0
     },
     {
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
-      "source_file": "src/main/resources/application.yml",
-      "source_location": "spring.jpa",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docker-compose.yml",
+      "source_location": null,
       "weight": 1.0,
-      "source": "application_yml_app",
-      "target": "help_spring_data_jpa"
+      "source": "docker_compose_config",
+      "target": "docker_compose_pgadmin"
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docker-compose.yml",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docker_compose_config",
+      "target": "docker_compose_postgres"
     },
     {
       "relation": "shares_data_with",
       "confidence": "INFERRED",
       "confidence_score": 0.9,
       "source_file": "src/main/resources/application.yml",
-      "source_location": "spring.datasource.url",
+      "source_location": null,
       "weight": 1.0,
-      "source": "application_yml_app",
+      "source": "application_yml_datasource",
       "target": "docker_compose_postgres"
     },
     {
@@ -3533,12 +3593,22 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docker-compose.yml",
-      "source_location": "depends_on",
+      "source_location": null,
       "weight": 1.0,
       "source": "docker_compose_pgadmin",
       "target": "docker_compose_postgres"
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/main/resources/application.yml",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "application_yml_config",
+      "target": "application_yml_datasource"
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "a7dfbf0628de3415133ee01e0ddc951e1f6a228e"
+  "built_at_commit": "efb672f2c827716a1ea5a9de31ebf89a4b4db581"
 }

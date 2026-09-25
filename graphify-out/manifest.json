@@ -35,14 +35,14 @@
     "semantic_hash": "44fd8f9a00716c99ab772225580fa757"
   },
   "src/main/java/com/logistics/proyect/group5/config/SecurityConfig.java": {
-    "mtime": 1788546012.7627838,
-    "ast_hash": "77a3a204826aab735738a928e2cd62d1",
-    "semantic_hash": "77a3a204826aab735738a928e2cd62d1"
+    "mtime": 1789148181.4341478,
+    "ast_hash": "533a61359463b01f22168c3b6e5eeb0d",
+    "semantic_hash": "533a61359463b01f22168c3b6e5eeb0d"
   },
   "src/main/java/com/logistics/proyect/group5/controller/AuthController.java": {
-    "mtime": 1788546012.7632458,
-    "ast_hash": "57c074ce773242d8eb102680d68ced95",
-    "semantic_hash": "57c074ce773242d8eb102680d68ced95"
+    "mtime": 1789148184.9393134,
+    "ast_hash": "ad9f865205e75182e84fa81b2dd4bbb8",
+    "semantic_hash": "ad9f865205e75182e84fa81b2dd4bbb8"
   },
   "src/main/java/com/logistics/proyect/group5/dto/AuthResponse.java": {
     "mtime": 1788546012.7632458,

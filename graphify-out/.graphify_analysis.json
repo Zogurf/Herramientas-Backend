@@ -59,6 +59,7 @@
       "controller_authcontroller_authcontroller",
       "controller_authcontroller_authcontroller_getcurrentuser",
       "controller_authcontroller_authcontroller_login",
+      "controller_authcontroller_authcontroller_logout",
       "controller_authcontroller_authcontroller_register",
       "getmapping",
       "postmapping",
@@ -67,7 +68,8 @@
       "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_registerrequest",
       "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_responseentity",
       "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_user",
-      "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_usersummarydto"
+      "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_usersummarydto",
+      "void"
     ],
     "4": [
       "authentication",
@@ -124,10 +126,11 @@
       "src_main_java_com_logistics_proyect_group5_repository_userrepository_java_user"
     ],
     "9": [
-      "application_yml_app",
+      "application_yml_config",
+      "application_yml_datasource",
+      "docker_compose_config",
       "docker_compose_pgadmin",
-      "docker_compose_postgres",
-      "help_spring_data_jpa"
+      "docker_compose_postgres"
     ],
     "10": [
       "group5_application",
@@ -158,29 +161,23 @@
       "dto_usersummarydto_usersummarydto"
     ],
     "16": [
-      "help_apache_maven"
+      "help_documentation"
     ],
     "17": [
-      "help_spring_boot_maven_plugin"
-    ],
-    "18": [
-      "help_spring_security"
-    ],
-    "19": [
-      "help_spring_web"
-    ],
-    "20": [
       "model_authprovider"
     ],
-    "21": [
+    "18": [
       "model_userrole"
+    ],
+    "19": [
+      "readme_documentation"
     ]
   },
   "cohesion": {
     "0": 0.19117647058823528,
     "1": 0.18333333333333332,
     "2": 0.3238095238095238,
-    "3": 0.28205128205128205,
+    "3": 0.24761904761904763,
     "4": 0.36363636363636365,
     "5": 0.4222222222222222,
     "6": 0.42857142857142855,
@@ -196,9 +193,7 @@
     "16": 1.0,
     "17": 1.0,
     "18": 1.0,
-    "19": 1.0,
-    "20": 1.0,
-    "21": 1.0
+    "19": 1.0
   },
   "gods": [
     {
@@ -222,6 +217,16 @@
       "degree": 5
     },
     {
+      "id": "controller_authcontroller_authcontroller",
+      "label": "AuthController",
+      "degree": 5
+    },
+    {
+      "id": "src_main_java_com_logistics_proyect_group5_controller_authcontroller_java_responseentity",
+      "label": "ResponseEntity",
+      "degree": 5
+    },
+    {
       "id": "exception_globalexceptionhandler_globalexceptionhandler",
       "label": "GlobalExceptionHandler",
       "degree": 5
@@ -240,32 +245,11 @@
       "id": "exceptionhandler",
       "label": "ExceptionHandler",
       "degree": 5
-    },
-    {
-      "id": "config_jwtauthenticationfilter_jwtauthenticationfilter",
-      "label": "JwtAuthenticationFilter",
-      "degree": 4
-    },
-    {
-      "id": "src_main_java_com_logistics_proyect_group5_config_jwttokenprovider_java_string",
-      "label": "String",
-      "degree": 4
     }
   ],
   "surprises": [
     {
-      "source": "proyect.group5",
-      "target": "Spring Data JPA",
-      "source_files": [
-        "src/main/resources/application.yml",
-        "HELP.md"
-      ],
-      "confidence": "INFERRED",
-      "relation": "conceptually_related_to",
-      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories"
-    },
-    {
-      "source": "proyect.group5",
+      "source": "PostgreSQL Datasource",
       "target": "PostgreSQL Service",
       "source_files": [
         "src/main/resources/application.yml",
@@ -289,6 +273,6 @@
   ],
   "tokens": {
     "input": 1920,
-    "output": 1226
+    "output": 1185
   }
 }
