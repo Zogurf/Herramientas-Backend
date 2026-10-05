@@ -9,8 +9,6 @@ CREATE SCHEMA IF NOT EXISTS auth_schema;
 CREATE SCHEMA IF NOT EXISTS store_schema;
 CREATE SCHEMA IF NOT EXISTS package_schema;
 
-GRANT USAGE ON SCHEMA auth_schema, store_schema, package_schema TO PUBLIC;
-
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -27,15 +25,13 @@ $$ language 'plpgsql';
 -- 2. AUTHENTICATION & CORE USERS (auth_schema)
 -- =============================================================================
 
--- Enum for Social Identity Providers
 CREATE TYPE auth_schema.social_provider AS ENUM ('LOCAL', 'GOOGLE', 'FACEBOOK', 'INSTAGRAM', 'OUTLOOK');
 
--- Core Users Table
 CREATE TABLE IF NOT EXISTS auth_schema.users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     full_name VARCHAR(150) NOT NULL,
     email VARCHAR(150) UNIQUE NOT NULL,
-    password_hash VARCHAR(255), -- Nullable for pure OAuth users
+    password_hash VARCHAR(255),
     phone VARCHAR(20),
     avatar_url TEXT,
     is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
@@ -49,12 +45,8 @@ CREATE TABLE IF NOT EXISTS auth_schema.users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_users_email ON auth_schema.users(email);
-CREATE INDEX idx_users_enabled ON auth_schema.users(is_enabled);
-
-CREATE TRIGGER trg_users_updated_at
-BEFORE UPDATE ON auth_schema.users
-FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE INDEX IF NOT EXISTS idx_users_email ON auth_schema.users(email);
+CREATE INDEX IF NOT EXISTS idx_users_enabled ON auth_schema.users(is_enabled);
 
 -- =============================================================================
 -- 3. ROLE-BASED ACCESS CONTROL (RBAC)
@@ -62,25 +54,23 @@ FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TABLE IF NOT EXISTS auth_schema.roles (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(50) UNIQUE NOT NULL, -- e.g. 'ROLE_ADMIN', 'ROLE_CLIENTE', 'ROLE_REPARTIDOR'
+    name VARCHAR(50) UNIQUE NOT NULL,
     description VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS auth_schema.permissions (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) UNIQUE NOT NULL, -- e.g. 'user:read', 'product:write', 'package:update'
+    name VARCHAR(100) UNIQUE NOT NULL,
     description VARCHAR(255)
 );
 
--- Join table: Users <-> Roles
 CREATE TABLE IF NOT EXISTS auth_schema.user_roles (
     user_id UUID NOT NULL REFERENCES auth_schema.users(id) ON DELETE CASCADE,
     role_id INT NOT NULL REFERENCES auth_schema.roles(id) ON DELETE CASCADE,
     PRIMARY KEY (user_id, role_id)
 );
 
--- Join table: Roles <-> Permissions
 CREATE TABLE IF NOT EXISTS auth_schema.role_permissions (
     role_id INT NOT NULL REFERENCES auth_schema.roles(id) ON DELETE CASCADE,
     permission_id INT NOT NULL REFERENCES auth_schema.permissions(id) ON DELETE CASCADE,
@@ -91,30 +81,24 @@ CREATE TABLE IF NOT EXISTS auth_schema.role_permissions (
 -- 4. OAUTH & SOCIAL LOGIN SESSIONS (Google, Facebook, Instagram)
 -- =============================================================================
 
--- Table to link user accounts with Social Login Providers
 CREATE TABLE IF NOT EXISTS auth_schema.user_social_accounts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES auth_schema.users(id) ON DELETE CASCADE,
     provider auth_schema.social_provider NOT NULL,
-    provider_user_id VARCHAR(255) NOT NULL, -- Unique ID given by Google, Facebook, or Instagram
+    provider_user_id VARCHAR(255) NOT NULL,
     provider_email VARCHAR(150),
     access_token TEXT,
     refresh_token TEXT,
     token_expires_at TIMESTAMP WITH TIME ZONE,
-    raw_profile_data JSONB, -- Stores raw OAuth profile payload
+    raw_profile_data JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_provider_user UNIQUE (provider, provider_user_id)
 );
 
-CREATE INDEX idx_social_provider_user ON auth_schema.user_social_accounts(provider, provider_user_id);
-CREATE INDEX idx_social_user_id ON auth_schema.user_social_accounts(user_id);
+CREATE INDEX IF NOT EXISTS idx_social_provider_user ON auth_schema.user_social_accounts(provider, provider_user_id);
+CREATE INDEX IF NOT EXISTS idx_social_user_id ON auth_schema.user_social_accounts(user_id);
 
-CREATE TRIGGER trg_user_social_updated_at
-BEFORE UPDATE ON auth_schema.user_social_accounts
-FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Active User Sessions & Refresh Tokens
 CREATE TABLE IF NOT EXISTS auth_schema.user_sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES auth_schema.users(id) ON DELETE CASCADE,
@@ -128,14 +112,13 @@ CREATE TABLE IF NOT EXISTS auth_schema.user_sessions (
     last_accessed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_sessions_user_id ON auth_schema.user_sessions(user_id);
-CREATE INDEX idx_sessions_token ON auth_schema.user_sessions(refresh_token_hash);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON auth_schema.user_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON auth_schema.user_sessions(refresh_token_hash);
 
 -- =============================================================================
 -- 5. ACCOUNT RECOVERY & VERIFICATION TOKENS
 -- =============================================================================
 
--- Password Reset Tokens
 CREATE TABLE IF NOT EXISTS auth_schema.password_reset_tokens (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES auth_schema.users(id) ON DELETE CASCADE,
@@ -146,10 +129,9 @@ CREATE TABLE IF NOT EXISTS auth_schema.password_reset_tokens (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_pwd_reset_token ON auth_schema.password_reset_tokens(token_hash);
-CREATE INDEX idx_pwd_reset_user ON auth_schema.password_reset_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_pwd_reset_token ON auth_schema.password_reset_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_pwd_reset_user ON auth_schema.password_reset_tokens(user_id);
 
--- Email Verification Tokens
 CREATE TABLE IF NOT EXISTS auth_schema.email_verification_tokens (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES auth_schema.users(id) ON DELETE CASCADE,
@@ -159,7 +141,7 @@ CREATE TABLE IF NOT EXISTS auth_schema.email_verification_tokens (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_email_verify_token ON auth_schema.email_verification_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_email_verify_token ON auth_schema.email_verification_tokens(token);
 
 -- =============================================================================
 -- 6. E-COMMERCE CATALOG (store_schema)
@@ -194,12 +176,8 @@ CREATE TABLE IF NOT EXISTS store_schema.products (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_products_sku ON store_schema.products(sku);
-CREATE INDEX idx_products_category ON store_schema.products(category_id);
-
-CREATE TRIGGER trg_products_updated_at
-BEFORE UPDATE ON store_schema.products
-FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE INDEX IF NOT EXISTS idx_products_sku ON store_schema.products(sku);
+CREATE INDEX IF NOT EXISTS idx_products_category ON store_schema.products(category_id);
 
 -- =============================================================================
 -- 7. LOGISTICS & PARCEL TRACKING (package_schema)
@@ -231,13 +209,7 @@ CREATE TABLE IF NOT EXISTS package_schema.packages (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_packages_tracking ON package_schema.packages(tracking_code);
-CREATE INDEX idx_packages_sender ON package_schema.packages(sender_id);
-CREATE INDEX idx_packages_courier ON package_schema.packages(courier_id);
-
-CREATE TRIGGER trg_packages_updated_at
-BEFORE UPDATE ON package_schema.packages
-FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE INDEX IF NOT EXISTS idx_packages_tracking ON package_schema.packages(tracking_code);
 
 CREATE TABLE IF NOT EXISTS package_schema.tracking_events (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -248,56 +220,4 @@ CREATE TABLE IF NOT EXISTS package_schema.tracking_events (
     registered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_tracking_events_package ON package_schema.tracking_events(package_id);
-
--- =============================================================================
--- 8. INITIAL SEED DATA (ROLES, PERMISSIONS & DEFAULT ADMIN)
--- =============================================================================
-
--- Seed Roles
-INSERT INTO auth_schema.roles (id, name, description) VALUES
-(1, 'ROLE_ADMIN', 'Administrador con acceso total al sistema y módulos'),
-(2, 'ROLE_CLIENTE', 'Cliente comprador y usuario de rastreo de paquetería'),
-(3, 'ROLE_REPARTIDOR', 'Repartidor / Courier operativo para actualización de guías')
-ON CONFLICT (name) DO NOTHING;
-
--- Seed Permissions
-INSERT INTO auth_schema.permissions (id, name, description) VALUES
-(1, 'user:read', 'Leer información de usuarios'),
-(2, 'user:write', 'Crear y actualizar usuarios'),
-(3, 'product:read', 'Ver productos en catálogo'),
-(4, 'product:write', 'Gestionar inventario y productos'),
-(5, 'package:read', 'Consultar guías de envío'),
-(6, 'package:write', 'Crear y actualizar estados de guías de envío')
-ON CONFLICT (name) DO NOTHING;
-
--- Seed Role-Permissions
-INSERT INTO auth_schema.role_permissions (role_id, permission_id) VALUES
-(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), -- ADMIN has all permissions
-(2, 3), (2, 5),                                 -- CLIENTE can read products and packages
-(3, 5), (3, 6)                                  -- REPARTIDOR can read and update package status
-ON CONFLICT DO NOTHING;
-
--- Seed Default Administrator User (Password BCrypt hash for 'admin123')
-INSERT INTO auth_schema.users (id, full_name, email, password_hash, is_enabled, is_email_verified)
-VALUES (
-    'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-    'Administrador General',
-    'admin@expressdelivery.com',
-    '$2a$10$e8R6.V/W/wWnQ/Gk9O8x/uO9241wFf/34G6q8Y0d.z41gJ28zK622', -- 'admin123'
-    TRUE,
-    TRUE
-) ON CONFLICT (email) DO NOTHING;
-
--- Assign ROLE_ADMIN to default administrator
-INSERT INTO auth_schema.user_roles (user_id, role_id)
-VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 1)
-ON CONFLICT DO NOTHING;
-
--- Seed Default Store Categories
-INSERT INTO store_schema.categories (id, name, slug, description) VALUES
-(1, 'Teclados Gamer', 'teclados-gamer', 'Teclados mecánicos y magnéticos de alto rendimiento'),
-(2, 'Mouse Gamer', 'mouse-gamer', 'MICE inalámbricos y ultraligeros con sensor óptico'),
-(3, 'Audífonos & Audio', 'audifonos-audio', 'Headsets con sonido envolvente y micrófonos de estudio'),
-(4, 'Monitores', 'monitores', 'Pantallas gaming con alta tasa de refresco y panel IPS/OLED')
-ON CONFLICT (slug) DO NOTHING;
+CREATE INDEX IF NOT EXISTS idx_tracking_events_package ON package_schema.tracking_events(package_id);

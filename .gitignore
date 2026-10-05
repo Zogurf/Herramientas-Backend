@@ -20,3 +20,23 @@ stitch_*/
 ### Logs & Temp ###
 *.log
 .DS_Store
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# InsForge & AI agent skills
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf
