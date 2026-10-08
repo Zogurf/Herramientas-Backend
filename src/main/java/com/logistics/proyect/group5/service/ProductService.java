@@ -111,6 +111,25 @@ public class ProductService {
     }
 
     @Transactional
+    public Product updateImages(UUID id, String imageUrl, String imageHoverUrl) {
+        Product product = findById(id);
+        if (imageUrl != null && !imageUrl.isBlank()) {
+            product.setImageUrl(imageUrl);
+        }
+        if (imageHoverUrl != null && !imageHoverUrl.isBlank()) {
+            product.setImageHoverUrl(imageHoverUrl);
+        }
+        return productRepository.save(product);
+    }
+
+    @Transactional
+    public Product removeHoverImage(UUID id) {
+        Product product = findById(id);
+        product.setImageHoverUrl(null);
+        return productRepository.save(product);
+    }
+
+    @Transactional
     public void delete(UUID id) {
         Product product = findById(id);
         productRepository.delete(product);
