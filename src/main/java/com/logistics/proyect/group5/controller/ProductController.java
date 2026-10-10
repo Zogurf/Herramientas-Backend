@@ -6,11 +6,14 @@ import com.logistics.proyect.group5.dto.InventoryStatsResponse;
 import com.logistics.proyect.group5.model.Product;
 import com.logistics.proyect.group5.service.CategoryService;
 import com.logistics.proyect.group5.service.CloudinaryService;
+import com.logistics.proyect.group5.service.InventoryExportService;
 import com.logistics.proyect.group5.service.ProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.data.domain.Page;
@@ -28,6 +31,7 @@ public class ProductController {
     private final ProductService productService;
     private final CategoryService categoryService;
     private final CloudinaryService cloudinaryService;
+    private final InventoryExportService inventoryExportService;
 
     @GetMapping
     public ResponseEntity<List<ProductResponse>> findAll(
@@ -80,6 +84,30 @@ public class ProductController {
             @RequestParam(required = false) Boolean active,
             @RequestParam(required = false) String stockStatus) {
         return ResponseEntity.ok(productService.inventoryStats(search, categoryId, active, stockStatus));
+    }
+
+    @GetMapping("/inventory/export.xlsx")
+    public ResponseEntity<byte[]> exportExcel(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer categoryId,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String stockStatus) {
+        return download(
+                inventoryExportService.exportExcel(search, categoryId, active, stockStatus),
+                "inventario.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+
+    @GetMapping("/inventory/export.pdf")
+    public ResponseEntity<byte[]> exportPdf(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer categoryId,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String stockStatus) {
+        return download(
+                inventoryExportService.exportPdf(search, categoryId, active, stockStatus),
+                "inventario.pdf",
+                MediaType.APPLICATION_PDF_VALUE);
     }
 
     @GetMapping("/{id}")
@@ -163,6 +191,13 @@ public class ProductController {
                 .newProduct(request.getNewProduct() == null || request.getNewProduct())
                 .active(request.getActive() == null || request.getActive())
                 .build();
+    }
+
+    private ResponseEntity<byte[]> download(byte[] content, String filename, String contentType) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.parseMediaType(contentType))
+                .body(content);
     }
 
     private ProductResponse toResponse(Product product) {
