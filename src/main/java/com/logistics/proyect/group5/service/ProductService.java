@@ -4,6 +4,8 @@ import com.logistics.proyect.group5.model.Category;
 import com.logistics.proyect.group5.model.Product;
 import com.logistics.proyect.group5.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,6 +14,7 @@ import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import com.logistics.proyect.group5.dto.InventoryStatsResponse;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +43,45 @@ public class ProductService {
     public List<Product> findByCategory(Integer categoryId) {
         categoryService.findById(categoryId);
         return productRepository.findByCategory_Id(categoryId);
+    }
+
+    public Page<Product> searchInventory(
+            String search,
+            Integer categoryId,
+            Boolean active,
+            String stockStatus,
+            Pageable pageable) {
+        if (categoryId != null) {
+            categoryService.findById(categoryId);
+        }
+        return productRepository.searchInventory(
+                normalizeOptionalText(search),
+                categoryId,
+                active,
+                normalizeStockStatus(stockStatus),
+                pageable);
+    }
+
+    public InventoryStatsResponse inventoryStats(
+            String search,
+            Integer categoryId,
+            Boolean active,
+            String stockStatus) {
+        if (categoryId != null) {
+            categoryService.findById(categoryId);
+        }
+        Object[] values = productRepository.inventoryStats(
+                normalizeOptionalText(search),
+                categoryId,
+                active,
+                normalizeStockStatus(stockStatus));
+        return InventoryStatsResponse.builder()
+                .totalProducts(((Number) values[0]).longValue())
+                .totalUnits(((Number) values[1]).longValue())
+                .totalValue((BigDecimal) values[2])
+                .lowStockProducts(((Number) values[3]).longValue())
+                .outOfStockProducts(((Number) values[4]).longValue())
+                .build();
     }
 
     public Product findById(UUID id) {
@@ -221,6 +263,17 @@ public class ProductService {
 
     private String normalizeSku(String sku) {
         return sku == null ? "" : sku.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeStockStatus(String stockStatus) {
+        if (stockStatus == null || stockStatus.isBlank()) {
+            return null;
+        }
+        String normalized = stockStatus.trim().toUpperCase(Locale.ROOT);
+        if (!List.of("OUT", "LOW", "OPTIMAL").contains(normalized)) {
+            throw new IllegalArgumentException("El estado de stock no es válido.");
+        }
+        return normalized;
     }
 
     private String normalizeSlug(String slug) {

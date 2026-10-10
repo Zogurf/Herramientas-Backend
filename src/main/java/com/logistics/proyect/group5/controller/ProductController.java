@@ -2,6 +2,7 @@ package com.logistics.proyect.group5.controller;
 
 import com.logistics.proyect.group5.dto.ProductRequest;
 import com.logistics.proyect.group5.dto.ProductResponse;
+import com.logistics.proyect.group5.dto.InventoryStatsResponse;
 import com.logistics.proyect.group5.model.Product;
 import com.logistics.proyect.group5.service.CategoryService;
 import com.logistics.proyect.group5.service.CloudinaryService;
@@ -12,6 +13,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
 import java.util.UUID;
@@ -41,6 +45,41 @@ public class ProductController {
             products = productService.findAll();
         }
         return ResponseEntity.ok(products.stream().map(this::toResponse).toList());
+    }
+
+    @GetMapping("/inventory")
+    public ResponseEntity<Page<ProductResponse>> searchInventory(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer categoryId,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String stockStatus,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "updatedAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String direction) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new IllegalArgumentException("La paginación no es válida.");
+        }
+        String sortField = switch (sortBy) {
+            case "name", "sku", "price", "stock", "createdAt", "updatedAt" -> sortBy;
+            default -> throw new IllegalArgumentException("El campo de ordenamiento no es válido.");
+        };
+        Sort.Direction sortDirection = Sort.Direction.fromOptionalString(direction)
+                .orElseThrow(() -> new IllegalArgumentException("La dirección de ordenamiento no es válida."));
+        Page<ProductResponse> response = productService.searchInventory(
+                        search, categoryId, active, stockStatus,
+                        PageRequest.of(page, size, Sort.by(sortDirection, sortField)))
+                .map(this::toResponse);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/inventory/stats")
+    public ResponseEntity<InventoryStatsResponse> inventoryStats(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer categoryId,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String stockStatus) {
+        return ResponseEntity.ok(productService.inventoryStats(search, categoryId, active, stockStatus));
     }
 
     @GetMapping("/{id}")
