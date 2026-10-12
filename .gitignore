@@ -26,6 +26,9 @@ stitch_*/
 .env.local
 .env.*.local
 
+# Local development profile (contains real credentials)
+**/application-local.properties
+
 # InsForge & AI agent skills
 .insforge
 .agent
