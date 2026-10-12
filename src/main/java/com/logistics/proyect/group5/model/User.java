@@ -2,6 +2,7 @@ package com.logistics.proyect.group5.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Formula;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -37,17 +38,26 @@ public class User implements UserDetails {
     @Column(name = "avatar_url")
     private String avatarUrl;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    /**
+     * Role resolved via RBAC tables (auth_schema.user_roles → auth_schema.roles).
+     * Defaults to CLIENTE when no role row exists.
+     */
+    @Formula("(SELECT COALESCE(r.name, 'CLIENTE') FROM auth_schema.user_roles ur " +
+             "LEFT JOIN auth_schema.roles r ON ur.role_id = r.id " +
+             "WHERE ur.user_id = id LIMIT 1)")
+    private String roleName;
+
+    /** Transient enum view — populated from roleName after load */
+    @Transient
     @Builder.Default
     private UserRole role = UserRole.CLIENTE;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    /** Provider — no column in DB for now, always LOCAL */
+    @Transient
     @Builder.Default
     private AuthProvider provider = AuthProvider.LOCAL;
 
-    @Column(nullable = false)
+    @Column(name = "is_enabled", nullable = false)
     @Builder.Default
     private boolean enabled = true;
 
@@ -56,6 +66,17 @@ public class User implements UserDetails {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @PostLoad
+    protected void onLoad() {
+        if (roleName != null) {
+            try {
+                this.role = UserRole.valueOf(roleName.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                this.role = UserRole.CLIENTE;
+            }
+        }
+    }
 
     @PrePersist
     protected void onCreate() {
