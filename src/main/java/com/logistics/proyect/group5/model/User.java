@@ -41,10 +41,19 @@ public class User implements UserDetails {
     /**
      * Role resolved via RBAC tables (auth_schema.user_roles → auth_schema.roles).
      * Defaults to CLIENTE when no role row exists.
+     * <p>
+     * Si el usuario tiene varias filas de rol, se resuelve de forma determinista
+     * al de mayor privilegio (ADMIN &gt; REPARTIDOR &gt; resto). Con {@code LIMIT 1}
+     * sin {@code ORDER BY} el resultado dependía del plan de ejecución.
      */
     @Formula("(SELECT COALESCE(r.name, 'CLIENTE') FROM auth_schema.user_roles ur " +
              "LEFT JOIN auth_schema.roles r ON ur.role_id = r.id " +
-             "WHERE ur.user_id = id LIMIT 1)")
+             "WHERE ur.user_id = id " +
+             "ORDER BY CASE r.name " +
+             "  WHEN 'ADMIN' THEN 0 " +
+             "  WHEN 'REPARTIDOR' THEN 1 " +
+             "  ELSE 2 END " +
+             "LIMIT 1)")
     private String roleName;
 
     /** Transient enum view — populated from roleName after load */
@@ -52,10 +61,13 @@ public class User implements UserDetails {
     @Builder.Default
     private UserRole role = UserRole.CLIENTE;
 
-    /** Provider — no column in DB for now, always LOCAL */
-    @Transient
+    @Column(name = "provider")
+    @Enumerated(EnumType.STRING)
     @Builder.Default
     private AuthProvider provider = AuthProvider.LOCAL;
+
+    @Column(name = "provider_id")
+    private String providerId;
 
     @Column(name = "is_enabled", nullable = false)
     @Builder.Default
@@ -69,12 +81,20 @@ public class User implements UserDetails {
 
     @PostLoad
     protected void onLoad() {
-        if (roleName != null) {
+        if (roleName != null && !roleName.isBlank()) {
+            // Tolerante al prefijo 'ROLE_' de bases sin migrar: el enum no lo incluye.
+            String normalized = roleName.trim().toUpperCase();
+            if (normalized.startsWith("ROLE_")) {
+                normalized = normalized.substring("ROLE_".length());
+            }
             try {
-                this.role = UserRole.valueOf(roleName.toUpperCase());
+                this.role = UserRole.valueOf(normalized);
             } catch (IllegalArgumentException e) {
                 this.role = UserRole.CLIENTE;
             }
+        }
+        if (this.provider == null) {
+            this.provider = AuthProvider.LOCAL;
         }
     }
 
