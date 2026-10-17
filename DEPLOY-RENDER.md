@@ -21,13 +21,15 @@ Estas tres cosas impiden que el despliegue funcione. Hazlas primero.
       `SPRING_DATASOURCE_PASSWORD` en el `.env` local del backend, en Render y
       en el script `db:users` del frontend.
 
-- [ ] **Aplicar el cambio de CORS en el backend** (pendiente en el código).
-      Hoy `config/CorsConfig.java` y `config/SecurityConfig.java` tienen los
-      orígenes fijos a `http://localhost:3000`. Con eso, el navegador bloquea
-      **todas** las llamadas del frontend desplegado con **HTTP 403** en el
-      preflight `OPTIONS`. Hasta aplicarlo, el frontend desplegado cargará pero
-      no podrá autenticar ni listar productos. Los orígenes deben salir de la
-      variable `CORS_ALLOWED_ORIGINS` (ya declarada en `render.yaml`).
+- [ ] **Definir `CORS_ALLOWED_ORIGINS` en Render** con la URL del frontend.
+      El backend ya lee esa variable (`CorsConfig` es la única fuente de CORS y
+      por defecto solo permite `localhost`), así que **sin definirla** el
+      navegador bloquea **todas** las llamadas del frontend desplegado con
+      **HTTP 403** en el preflight `OPTIONS`: la tienda cargaría pero no podría
+      autenticar ni listar productos. Ya está declarada en `render.yaml` como
+      `sync: false`; solo hay que darle valor (URL del frontend, sin barra final).
+      Admite varios orígenes separados por comas y comodines como
+      `https://*.onrender.com` para los previews de Render.
 
 - [ ] **Fijar `SPRING_JPA_HIBERNATE_DDL_AUTO=none`.**
       Va ya así en `render.yaml`. No lo cambies a `update`: el esquema es la
@@ -127,10 +129,11 @@ curl -s -i -X OPTIONS "$API/api/v1/auth/login" \
   -H 'Access-Control-Request-Method: POST' | head -20
 ```
 
-Si el preflight devuelve **403** y sin cabecera `access-control-allow-origin`, el
-cambio de CORS de la sección 0 no está aplicado o `CORS_ALLOWED_ORIGINS` no
-coincide **exactamente** con el origen del frontend (ni barra final, ni `www`,
-esquema `https` correcto).
+Si el preflight devuelve **403** y sin cabecera `access-control-allow-origin`,
+`CORS_ALLOWED_ORIGINS` no está definido o no coincide **exactamente** con el
+origen del frontend (ni barra final, ni `www`, esquema `https` correcto). Los
+orígenes efectivos aparecen en los logs del backend al arrancar:
+`CORS habilitado para los orígenes: [...]`.
 
 En el frontend: abrir `/login`, iniciar sesión y comprobar que el panel `/admin`
 carga con datos reales (requiere rol `ADMIN`).
