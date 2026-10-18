@@ -40,6 +40,12 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/facebook")
+    public ResponseEntity<AuthResponse> facebookLogin(@Valid @RequestBody FacebookAuthRequest request) {
+        AuthResponse response = authService.loginWithFacebook(request);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/logout")
     public ResponseEntity<Void> logout() {
         return ResponseEntity.ok().build();

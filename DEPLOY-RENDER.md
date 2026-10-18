@@ -36,9 +36,9 @@ Estas tres cosas impiden que el despliegue funcione. Hazlas primero.
       fuente de verdad (`src/main/resources/schema.sql`) y `update` haría que
       Hibernate altere `auth_schema` y `store_schema` en cada arranque.
 
-> Nota: el login con Google y la recuperación de contraseña dependen de
-> variables que debe aportar el dueño de esos proyectos (Cloudinary, Google
-> Cloud, Gmail). Ver la sección 3.
+> Nota: el login con Google, el login con Facebook y la recuperación de contraseña
+> dependen de variables que debe aportar el dueño de esos proyectos (Cloudinary,
+> Google Cloud, Meta, Gmail). Ver la sección 3.
 
 ---
 
@@ -69,7 +69,8 @@ El blueprint define:
 ## 2. Frontend (servicio Node)
 
 - [ ] Repetir el alta de Blueprint con `JosiasVilca/HerramientasFront`, rama **`dev`**.
-- [ ] Rellenar `NEXT_PUBLIC_API_URL` y `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (sección 3).
+- [ ] Rellenar `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` y
+      `NEXT_PUBLIC_FACEBOOK_CLIENT_ID` (sección 3).
 - [ ] Verificar (sección 4).
 
 El blueprint define build `pnpm install --frozen-lockfile && pnpm run build`,
@@ -95,6 +96,7 @@ No las escribas en el repo: el dashboard las pedirá una sola vez.
 | `SPRING_DATASOURCE_PASSWORD` | InsForge — **usar la contraseña ya rotada** |
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | Cloudinary → Dashboard |
 | `GOOGLE_CLIENT_ID` | Google Cloud → Credenciales → OAuth 2.0 Client ID |
+| `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` | Meta for Developers → tu app → *Configuración básica*. Son el **App ID** y el **App Secret**. El endpoint responde `400` mientras estén vacías. |
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | Cuenta de Gmail + contraseña de aplicación |
 | `FRONTEND_URL` | URL del frontend en Render, **sin barra final** |
 | `CORS_ALLOWED_ORIGINS` | La misma URL del frontend, **sin barra final** |
@@ -106,6 +108,22 @@ No las escribas en el repo: el dashboard las pedirá una sola vez.
 |---|---|
 | `NEXT_PUBLIC_API_URL` | URL del backend **incluyendo `/api`**: `https://nexora-backend.onrender.com/api` |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | El **mismo** Client ID que el backend |
+| `NEXT_PUBLIC_FACEBOOK_CLIENT_ID` | El **mismo** App ID de Meta que el backend (nunca el App Secret) |
+
+### Publicar la app de Facebook (opcional, para usuarios ajenos a la app)
+
+Mientras la app de Meta siga en modo **Desarrollo**, solo pueden iniciar sesión las
+cuentas con un rol en ella (administradores y *testers*). Para que cualquiera pueda
+usar «Iniciar sesión con Facebook» hay que **publicarla**, y Meta exige dos URLs
+públicas. Ya están implementadas en el frontend:
+
+| Campo de Meta | URL a pegar (con tu dominio real) |
+|---|---|
+| URL de la política de privacidad | `https://<frontend>.onrender.com/privacidad` |
+| URL de instrucciones para la eliminación de datos | `https://<frontend>.onrender.com/eliminacion-de-datos` |
+
+Ambas son públicas, sin sesión y se sirven como HTML estático. Meta rechaza la URL
+si redirige a un login.
 
 > Si el backend y el frontend no se llaman `nexora-backend` / `nexora-frontend`,
 > ajusta las URLs. Si prefieres otro nombre de servicio, cámbialo en `render.yaml`
@@ -123,6 +141,13 @@ curl -s -o /dev/null -w '%{http_code}\n' "$API/api/products"      # 200
 curl -s -o /dev/null -w '%{http_code}\n' "$API/api/categories"    # 200
 curl -s -o /dev/null -w '%{http_code}\n' -X POST "$API/api/products"   # 403 (protegido)
 
+# Login con Facebook: con cuerpo vacío debe dar 400 (validación), no 500.
+# Con las credenciales ya configuradas y un token inventado da 400 y el
+# mensaje "Token de Facebook inválido o expirado."; si las credenciales
+# faltan, "El inicio de sesión con Facebook no está configurado en el servidor."
+curl -s -X POST "$API/api/v1/auth/facebook" \
+  -H 'Content-Type: application/json' -d '{}' | head -c 200; echo
+
 # CORS: debe responder 200 y traer la cabecera access-control-allow-origin
 curl -s -i -X OPTIONS "$API/api/v1/auth/login" \
   -H "Origin: https://<frontend>.onrender.com" \
@@ -136,7 +161,13 @@ orígenes efectivos aparecen en los logs del backend al arrancar:
 `CORS habilitado para los orígenes: [...]`.
 
 En el frontend: abrir `/login`, iniciar sesión y comprobar que el panel `/admin`
-carga con datos reales (requiere rol `ADMIN`).
+carga con datos reales (requiere rol `ADMIN`). Comprobar también que las páginas
+legales responden **sin sesión** (Meta las rechaza si redirigen a `/login`):
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' "https://<frontend>.onrender.com/privacidad"            # 200
+curl -s -o /dev/null -w '%{http_code}\n' "https://<frontend>.onrender.com/eliminacion-de-datos"  # 200
+```
 
 ---
 
@@ -183,6 +214,24 @@ logs del backend en busca de excepciones SMTP.
 Además del `CLIENT_ID`, hay que autorizar el dominio del frontend en Google Cloud
 → *Credenciales* → *Orígenes autorizados de JavaScript*. Ese cambio requiere
 acceso al proyecto de Google (el `CLIENT_SECRET` no lo usa el backend).
+
+**El login con Facebook no funciona.**
+Comprobar en este orden:
+
+1. Que `FACEBOOK_CLIENT_ID` y `FACEBOOK_CLIENT_SECRET` estén definidos en el
+   servicio del backend (si faltan, el endpoint responde `400` con «no está
+   configurado en el servidor»).
+2. Que `NEXT_PUBLIC_FACEBOOK_CLIENT_ID` sea el **mismo App ID**. Al ser una
+   variable `NEXT_PUBLIC_*`, cambiarla exige **redeployar** el frontend.
+3. Que el correo esté disponible: si la cuenta de Facebook no tiene correo
+   verificado o el usuario no concede el permiso `email`, el backend responde
+   `400` explicando que no pudo obtenerlo. Sin correo no se puede identificar la
+   cuenta.
+4. Que la app de Meta esté en modo **Live** si quien prueba no es
+   administrador ni *tester* de esa app (ver «Publicar la app de Facebook»).
+
+Los errores del proveedor quedan en los logs del backend con el prefijo
+`[AUTH SERVICE]`.
 
 **El frontend carga pero no muestra datos.**
 Comprobar `NEXT_PUBLIC_API_URL` (debe incluir `/api`) y que el backend responda.
