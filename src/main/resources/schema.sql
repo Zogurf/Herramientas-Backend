@@ -340,3 +340,22 @@ CREATE TABLE IF NOT EXISTS package_schema.tracking_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tracking_events_package ON package_schema.tracking_events(package_id);
+
+-- Order tracking (store_schema). Independent from parcel tracking in package_schema.
+-- Idempotent migration: also safe to apply to an existing database.
+CREATE TABLE IF NOT EXISTS store_schema.orders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS store_schema.tracking_events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID NOT NULL REFERENCES store_schema.orders(id),
+    status VARCHAR(50) NOT NULL,
+    location VARCHAR(200),
+    description TEXT,
+    event_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_tracking_timeline
+    ON store_schema.tracking_events(order_id, event_date DESC);

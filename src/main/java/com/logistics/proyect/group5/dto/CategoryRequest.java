@@ -1,10 +1,14 @@
 package com.logistics.proyect.group5.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
+import lombok.*;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class CategoryRequest {
 
     @NotBlank(message = "El nombre de la categoría es obligatorio")
@@ -16,5 +20,13 @@ public class CategoryRequest {
 
     private String description;
 
-    private Boolean isActive;
+    private Integer parentId;
+
+    @JsonAlias("isActive")
+    private Boolean active;
+
+    // Compatibilidad con llamadas Java de dev
+    public Boolean getIsActive() {
+        return active;
+    }
 }

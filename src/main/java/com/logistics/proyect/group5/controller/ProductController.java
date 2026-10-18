@@ -30,13 +30,13 @@ public class ProductController {
 
     private final ProductService productService;
 
-    /** Catálogo público: solo productos activos. */
+    /** Cat├ílogo p├║blico: solo productos activos. */
     @GetMapping
     public ResponseEntity<List<ProductResponse>> list() {
         return ResponseEntity.ok(productService.listActive());
     }
 
-    /** Panel de administración: incluye productos inactivos. */
+    /** Panel de administraci├│n: incluye productos inactivos. */
     @GetMapping("/manage")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<ProductResponse>> listAll() {
@@ -55,7 +55,7 @@ public class ProductController {
         return ResponseEntity.status(HttpStatus.CREATED).body(productService.create(request, file));
     }
 
-    /** Compatibilidad con el endpoint histórico {@code POST /products/upload}. */
+    /** Compatibilidad con el endpoint hist├│rico {@code POST /products/upload}. */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ProductResponse> upload(@Valid @ModelAttribute ProductRequest request,

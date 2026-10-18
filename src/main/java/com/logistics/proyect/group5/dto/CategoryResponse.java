@@ -1,16 +1,32 @@
 package com.logistics.proyect.group5.dto;
 
-import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class CategoryResponse {
 
     private Integer id;
     private String name;
     private String slug;
     private String description;
-    private Boolean isActive;
+    private Integer parentId;
+    private boolean active;
     private LocalDateTime createdAt;
+
+    @JsonProperty("isActive")
+    public boolean getIsActive() {
+        return active;
+    }
+
+    public void setIsActive(Boolean isActive) {
+        if (isActive != null) {
+            this.active = isActive;
+        }
+    }
 }

@@ -5,16 +5,13 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
-/**
- * Categoría del catálogo. Mapea {@code store_schema.categories}.
- */
 @Entity
 @Table(name = "categories", schema = "store_schema")
-@Getter
+@Getter 
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class Category {
 
     @Id
@@ -24,11 +21,15 @@ public class Category {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false, unique = true, length = 120)
+    @Column(nullable = false, length = 120, unique = true)
     private String slug;
 
-    @Column(columnDefinition = "text")
+    @Column(columnDefinition = "TEXT")
     private String description;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    private Category parent;
 
     @Column(name = "is_active", nullable = false)
     @Builder.Default

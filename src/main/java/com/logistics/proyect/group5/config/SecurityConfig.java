@@ -29,11 +29,43 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/v1/auth/**", "/api/v1/auth/**", "/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/products/**", "/api/products/**",
-                                "/categories/**", "/api/categories/**").permitAll()
-                        .requestMatchers("/packages/**", "/tracking/**").permitAll()
-                        .requestMatchers("/error", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // Autenticación pública
+                        .requestMatchers(
+                                "/v1/auth/**",
+                                "/api/v1/auth/**",
+                                "/auth/**"
+                        ).permitAll()
+
+                        // Endpoints administrativos
+                        .requestMatchers(
+                                "/admin/categories/**",
+                                "/admin/products/**"
+                        ).hasRole("ADMIN")
+
+                        // Consulta pública del catálogo
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/products/**",
+                                "/api/products/**",
+                                "/categories/**",
+                                "/api/categories/**"
+                        ).permitAll()
+
+                        // Paquetes y seguimiento
+                        .requestMatchers(
+                                "/packages/**",
+                                "/tracking/**"
+                        ).permitAll()
+
+                        // Documentación y errores
+                        .requestMatchers(
+                                "/error",
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
+
+                        // Resto de endpoints requieren autenticación
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
