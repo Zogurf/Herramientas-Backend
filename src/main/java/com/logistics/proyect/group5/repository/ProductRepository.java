@@ -61,10 +61,11 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
             Pageable pageable);
 
     @Query("""
-            SELECT COUNT(p), COALESCE(SUM(p.stock), 0),
-                   COALESCE(SUM(p.price * p.stock), 0),
-                   SUM(CASE WHEN p.stock > 0 AND p.stock <= 10 THEN 1 ELSE 0 END),
-                   SUM(CASE WHEN p.stock = 0 THEN 1 ELSE 0 END)
+            SELECT COUNT(p) AS totalProducts,
+                   COALESCE(SUM(p.stock), 0) AS totalUnits,
+                   COALESCE(SUM(p.price * p.stock), 0) AS totalValue,
+                   COALESCE(SUM(CASE WHEN p.stock > 0 AND p.stock <= 10 THEN 1 ELSE 0 END), 0) AS lowStockProducts,
+                   COALESCE(SUM(CASE WHEN p.stock = 0 THEN 1 ELSE 0 END), 0) AS outOfStockProducts
             FROM Product p
             WHERE (:search IS NULL OR :search = ''
                 OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
@@ -77,7 +78,7 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
                 OR (:stockStatus = 'LOW' AND p.stock > 0 AND p.stock <= 10)
                 OR (:stockStatus = 'OPTIMAL' AND p.stock > 10))
             """)
-    Object[] inventoryStats(
+    InventoryStatsProjection inventoryStats(
             @Param("search") String search,
             @Param("categoryId") Integer categoryId,
             @Param("active") Boolean active,

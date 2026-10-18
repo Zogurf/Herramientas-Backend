@@ -204,17 +204,17 @@ public class ProductService {
         if (categoryId != null) {
             categoryService.findById(categoryId);
         }
-        Object[] values = productRepository.inventoryStats(
+        var stats = productRepository.inventoryStats(
                 normalizeOptionalText(search),
                 categoryId,
                 active,
                 normalizeStockStatus(stockStatus));
         return InventoryStatsResponse.builder()
-                .totalProducts(((Number) values[0]).longValue())
-                .totalUnits(((Number) values[1]).longValue())
-                .totalValue((BigDecimal) values[2])
-                .lowStockProducts(((Number) values[3]).longValue())
-                .outOfStockProducts(((Number) values[4]).longValue())
+                .totalProducts(stats.getTotalProducts())
+                .totalUnits(stats.getTotalUnits())
+                .totalValue(stats.getTotalValue())
+                .lowStockProducts(stats.getLowStockProducts())
+                .outOfStockProducts(stats.getOutOfStockProducts())
                 .build();
     }
 
