@@ -1,0 +1,45 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# test
+graphify-out/
+stitch_*/
+
+### IDE ###
+.idea
+.classpath
+.project
+.settings
+.factorypath
+*.iml
+*.iws
+*.ipr
+
+### Logs & Temp ###
+*.log
+.DS_Store
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Local development profile (contains real credentials)
+**/application-local.properties
+
+# InsForge & AI agent skills
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf

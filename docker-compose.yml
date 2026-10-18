@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # Spring Boot REST API Service
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexora_backend
+    restart: always
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - PORT=8080
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+
+  # Local PostgreSQL Database (Optional for local offline testing)
+  postgres:
+    image: postgres:16-alpine
+    container_name: delivery_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: delivery_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Local pgAdmin Interface
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: delivery_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: adminpassword
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
