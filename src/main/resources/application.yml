@@ -12,8 +12,7 @@ spring:
     driver-class-name: org.postgresql.Driver
 
   jpa:
-    hibernate:
-      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    # ddl-auto se define una sola vez en application.properties (predeterminado none).
     show-sql: true
     properties:
       hibernate:

@@ -27,9 +27,17 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     boolean existsByCategory_Id(Integer categoryId);
 
+    default boolean existsByCategoryId(Integer categoryId) {
+        return existsByCategory_Id(categoryId);
+    }
+
     List<Product> findByActiveTrue();
 
     List<Product> findByNameContainingIgnoreCase(String name);
+
+    List<Product> findByActiveTrueOrderByCreatedAtDesc();
+
+    List<Product> findAllByOrderByCreatedAtDesc();
 
     @Query("""
             SELECT p

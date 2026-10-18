@@ -29,7 +29,7 @@ class ProductServiceTest {
 
     @BeforeEach
     void setUp() {
-        productService = new ProductService(productRepository, categoryService);
+        productService = new ProductService(productRepository, categoryService, mock(CloudinaryService.class));
     }
 
     @Test

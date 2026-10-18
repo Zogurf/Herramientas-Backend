@@ -1,0 +1,102 @@
+# =============================================================================
+# Render Blueprint — NEXORA STORAGE & LOGISTICS · BACKEND
+# Servicio web Docker (Spring Boot 4 · Java 21 · contexto HTTP /api)
+#
+# Cómo desplegar:  Render Dashboard → New + → Blueprint → elegir este repo y la
+#                  rama `dev`. Render leerá este archivo y creará el servicio.
+#
+# Las variables marcadas con `sync: false` NO se guardan en el repositorio:
+# el dashboard pedirá su valor al crear el servicio. No pongas secretos aquí.
+# =============================================================================
+
+services:
+  - type: web
+    name: nexora-backend
+    runtime: docker
+    plan: free # 0.1 CPU / 512 MB. Si hay errores OOM, subir a `0.5c-512mb` o `1c-2g`.
+    region: virginia # US East: la región más cercana a la base InsForge (us-east).
+    branch: dev
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeployTrigger: commit # Redeploy automático con cada push a `dev`.
+
+    # healthCheckPath: /api/actuator/health
+    #   ↑ DESCOMENTAR SOLO si se añade Spring Boot Actuator Y se permite la ruta
+    #     en SecurityConfig. Hoy /api/actuator/health responde 403 y el deploy
+    #     fallaría el health check. Sin esta línea Render usa sonda TCP (funciona).
+
+    envVars:
+      # ---------------------------------------------------------------------
+      # Base de datos — PostgreSQL administrado por InsForge
+      # ---------------------------------------------------------------------
+      # Formato: jdbc:postgresql://<host>:5432/insforge?sslmode=require
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+
+      # `none` es obligatorio en producción: el esquema manda (src/main/resources/schema.sql).
+      # Con `update`, Hibernate alteraría auth_schema y store_schema en cada arranque.
+      - key: SPRING_JPA_HIBERNATE_DDL_AUTO
+        value: none
+
+      # ---------------------------------------------------------------------
+      # Seguridad · JWT
+      # ---------------------------------------------------------------------
+      # Render genera un valor aleatorio base64 de 256 bits (44 caracteres).
+      # JwtTokenProvider usa los bytes UTF-8 del secreto, así que sirve tal cual.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRATION
+        value: 86400000 # 24 h en milisegundos
+
+      # ---------------------------------------------------------------------
+      # Cloudinary — avatares de perfil e imágenes de producto
+      # ---------------------------------------------------------------------
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      # ---------------------------------------------------------------------
+      # Google OAuth — verificación del id_token en POST /api/v1/auth/google
+      # ---------------------------------------------------------------------
+      # Es el "Client ID" (público). El frontend usa el mismo valor.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+
+      # ---------------------------------------------------------------------
+      # SMTP de Gmail — recuperación de contraseña
+      # ---------------------------------------------------------------------
+      # ⚠️ El plan Free de Render bloquea los puertos de salida 25, 465 y 587,
+      #    y Gmail usa el 587: el correo NO se enviará. Además EmailService
+      #    absorbe el fallo, así que el endpoint igualmente responde 200 y
+      #    parecería que funcionó. Solución: proveedor por API HTTP
+      #    (Resend, Brevo, SendGrid) o subir a un plan con puertos abiertos.
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+
+      # ---------------------------------------------------------------------
+      # URL pública del frontend — enlaces de recuperación de contraseña
+      # ---------------------------------------------------------------------
+      # Ej.: https://nexora-frontend.onrender.com  (SIN barra final)
+      - key: FRONTEND_URL
+        sync: false
+
+      # ---------------------------------------------------------------------
+      # CORS
+      # ---------------------------------------------------------------------
+      # ⚠️ REQUIERE UN CAMBIO DE CÓDIGO PENDIENTE: hoy CorsConfig tiene los
+      #    orígenes fijos a http://localhost:3000. Hasta aplicarlo, esta
+      #    variable no surte efecto y el navegador bloqueará al frontend
+      #    desplegado con HTTP 403 en el preflight.
+      # Valor: URL del frontend, sin barra final.
+      # Ej.: https://nexora-frontend.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false

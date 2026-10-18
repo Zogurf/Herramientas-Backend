@@ -1,5 +1,6 @@
 package com.logistics.proyect.group5.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -30,4 +31,26 @@ public class ProductResponse {
     private boolean active;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    @JsonProperty("isNew")
+    public Boolean getIsNew() {
+        return newProduct;
+    }
+
+    public void setIsNew(Boolean isNew) {
+        if (isNew != null) {
+            this.newProduct = isNew;
+        }
+    }
+
+    @JsonProperty("isActive")
+    public Boolean getIsActive() {
+        return active;
+    }
+
+    public void setIsActive(Boolean isActive) {
+        if (isActive != null) {
+            this.active = isActive;
+        }
+    }
 }

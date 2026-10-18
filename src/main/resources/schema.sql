@@ -25,7 +25,15 @@ $$ language 'plpgsql';
 -- 2. AUTHENTICATION & CORE USERS (auth_schema)
 -- =============================================================================
 
-CREATE TYPE auth_schema.social_provider AS ENUM ('LOCAL', 'GOOGLE', 'FACEBOOK', 'INSTAGRAM', 'OUTLOOK');
+-- Enum de proveedores sociales (idempotente: schema.sql debe poder re-ejecutarse).
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type
+                    WHERE typname = 'social_provider'
+                      AND typnamespace = 'auth_schema'::regnamespace) THEN
+        CREATE TYPE auth_schema.social_provider AS ENUM ('LOCAL', 'GOOGLE', 'FACEBOOK', 'INSTAGRAM', 'OUTLOOK');
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS auth_schema.users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -41,9 +49,47 @@ CREATE TABLE IF NOT EXISTS auth_schema.users (
     is_email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     mfa_secret VARCHAR(100),
+    provider VARCHAR(20) NOT NULL DEFAULT 'LOCAL',
+    provider_id VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT users_provider_check CHECK (provider IN ('LOCAL', 'GOOGLE', 'FACEBOOK', 'INSTAGRAM', 'OUTLOOK'))
 );
+
+-- -----------------------------------------------------------------------------
+-- Reconciliación idempotente de auth_schema.users
+-- Cubre bases creadas por versiones previas de la entidad (columnas enabled/role,
+-- sin provider_id) y las alinea con el modelo actual.
+-- -----------------------------------------------------------------------------
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_schema = 'auth_schema' AND table_name = 'users' AND column_name = 'enabled')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_schema = 'auth_schema' AND table_name = 'users' AND column_name = 'is_enabled') THEN
+        ALTER TABLE auth_schema.users RENAME COLUMN enabled TO is_enabled;
+    END IF;
+END $$;
+
+ALTER TABLE auth_schema.users
+    ADD COLUMN IF NOT EXISTS provider VARCHAR(20) NOT NULL DEFAULT 'LOCAL',
+    ADD COLUMN IF NOT EXISTS provider_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE auth_schema.users ALTER COLUMN provider SET DEFAULT 'LOCAL';
+ALTER TABLE auth_schema.users ALTER COLUMN is_enabled SET DEFAULT TRUE;
+
+-- El rol se resuelve vía RBAC (user_roles/roles): eliminar la columna heredada si existe.
+ALTER TABLE auth_schema.users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE auth_schema.users DROP COLUMN IF EXISTS role;
+
+-- Normalizar el CHECK de provider.
+ALTER TABLE auth_schema.users DROP CONSTRAINT IF EXISTS chk_users_provider;
+ALTER TABLE auth_schema.users DROP CONSTRAINT IF EXISTS users_provider_check;
+ALTER TABLE auth_schema.users ADD CONSTRAINT users_provider_check
+    CHECK (provider IN ('LOCAL', 'GOOGLE', 'FACEBOOK', 'INSTAGRAM', 'OUTLOOK'));
+
+CREATE INDEX IF NOT EXISTS idx_users_provider_id ON auth_schema.users(provider_id);
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON auth_schema.users(email);
 CREATE INDEX IF NOT EXISTS idx_users_enabled ON auth_schema.users(is_enabled);
@@ -76,6 +122,43 @@ CREATE TABLE IF NOT EXISTS auth_schema.role_permissions (
     permission_id INT NOT NULL REFERENCES auth_schema.permissions(id) ON DELETE CASCADE,
     PRIMARY KEY (role_id, permission_id)
 );
+
+-- -----------------------------------------------------------------------------
+-- Reconciliación idempotente del RBAC
+-- 1) Los nombres de rol se almacenan SIN el prefijo 'ROLE_'; ese prefijo es una
+--    convención de authorities de Spring y ya lo aplica User#getAuthorities().
+-- 2) Se eliminan asignaciones huérfanas y se restaura la FK de user_id.
+-- 3) Backfill: todo usuario sin rol recibe CLIENTE, coherente con el alta de
+--    cuentas (que persiste el rol explícitamente).
+-- -----------------------------------------------------------------------------
+UPDATE auth_schema.roles AS rol
+   SET name = substring(rol.name from 6)
+ WHERE substring(rol.name from 1 for 5) = 'ROLE_'
+   AND NOT EXISTS (
+        SELECT 1 FROM auth_schema.roles r2
+         WHERE r2.id <> rol.id
+           AND r2.name = substring(rol.name from 6));
+
+DELETE FROM auth_schema.user_roles ur
+ WHERE NOT EXISTS (SELECT 1 FROM auth_schema.users u WHERE u.id = ur.user_id);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                    WHERE conrelid = 'auth_schema.user_roles'::regclass
+                      AND conname = 'user_roles_user_id_fkey') THEN
+        ALTER TABLE auth_schema.user_roles
+            ADD CONSTRAINT user_roles_user_id_fkey
+            FOREIGN KEY (user_id) REFERENCES auth_schema.users(id) ON DELETE CASCADE;
+    END IF;
+END $$;
+
+INSERT INTO auth_schema.user_roles (user_id, role_id)
+SELECT u.id, r.id
+  FROM auth_schema.users u
+  JOIN auth_schema.roles r ON r.name IN ('CLIENTE', 'ROLE_CLIENTE')
+ WHERE NOT EXISTS (SELECT 1 FROM auth_schema.user_roles ur WHERE ur.user_id = u.id)
+ON CONFLICT DO NOTHING;
 
 -- =============================================================================
 -- 4. OAUTH & SOCIAL LOGIN SESSIONS (Google, Facebook, Instagram)
@@ -179,18 +262,54 @@ CREATE TABLE IF NOT EXISTS store_schema.products (
 CREATE INDEX IF NOT EXISTS idx_products_sku ON store_schema.products(sku);
 CREATE INDEX IF NOT EXISTS idx_products_category ON store_schema.products(category_id);
 
+-- -----------------------------------------------------------------------------
+-- Reconciliación idempotente del catálogo (store_schema)
+-- Cubre bases creadas por Hibernate, que no definían identidad en categories.id
+-- ni los DEFAULT declarados aquí; las alinea con schema.sql (fuente de verdad).
+-- -----------------------------------------------------------------------------
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'store_schema' AND table_name = 'categories'
+          AND column_name = 'id' AND is_identity = 'NO' AND column_default IS NULL
+    ) THEN
+        ALTER TABLE store_schema.categories ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY;
+    END IF;
+END $$;
+
+ALTER TABLE store_schema.categories ALTER COLUMN is_active SET DEFAULT TRUE;
+ALTER TABLE store_schema.categories ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE store_schema.products ALTER COLUMN id SET DEFAULT uuid_generate_v4();
+ALTER TABLE store_schema.products ALTER COLUMN stock SET DEFAULT 0;
+ALTER TABLE store_schema.products ALTER COLUMN is_active SET DEFAULT TRUE;
+ALTER TABLE store_schema.products ALTER COLUMN is_new SET DEFAULT TRUE;
+ALTER TABLE store_schema.products ALTER COLUMN rating SET DEFAULT 5.0;
+ALTER TABLE store_schema.products ALTER COLUMN reviews_count SET DEFAULT 0;
+ALTER TABLE store_schema.products ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE store_schema.products ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
+
 -- =============================================================================
 -- 7. LOGISTICS & PARCEL TRACKING (package_schema)
 -- =============================================================================
 
-CREATE TYPE package_schema.package_status AS ENUM (
-    'REGISTRADO',
-    'EN_ALMACEN',
-    'EN_TRANSITO',
-    'EN_RUTA',
-    'ENTREGADO',
-    'INCIDENCIA'
-);
+-- Enum de estados de paquete (idempotente).
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type
+                    WHERE typname = 'package_status'
+                      AND typnamespace = 'package_schema'::regnamespace) THEN
+        CREATE TYPE package_schema.package_status AS ENUM (
+            'REGISTRADO',
+            'EN_ALMACEN',
+            'EN_TRANSITO',
+            'EN_RUTA',
+            'ENTREGADO',
+            'INCIDENCIA'
+        );
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS package_schema.packages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

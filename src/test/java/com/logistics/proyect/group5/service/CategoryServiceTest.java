@@ -24,7 +24,7 @@ class CategoryServiceTest {
 
     @BeforeEach
     void setUp() {
-        categoryService = new CategoryService(categoryRepository);
+        categoryService = new CategoryService(categoryRepository, mock(com.logistics.proyect.group5.repository.ProductRepository.class));
     }
 
     @Test

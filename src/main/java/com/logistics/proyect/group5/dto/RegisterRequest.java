@@ -1,6 +1,5 @@
 package com.logistics.proyect.group5.dto;
 
-import com.logistics.proyect.group5.model.UserRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -28,5 +27,6 @@ public class RegisterRequest {
 
     private String phone;
 
-    private UserRole role;
+    // El rol NO se acepta en el auto-registro: toda cuenta nueva es CLIENTE.
+    // La asignación de ADMIN/REPARTIDOR es una operación de administrador.
 }

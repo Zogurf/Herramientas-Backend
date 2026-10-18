@@ -2,6 +2,14 @@ package com.logistics.proyect.group5.service;
 
 import com.logistics.proyect.group5.model.Category;
 import com.logistics.proyect.group5.model.Product;
+import com.logistics.proyect.group5.dto.ProductRequest;
+import com.logistics.proyect.group5.dto.ProductResponse;
+import com.logistics.proyect.group5.exception.ResourceNotFoundException;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import com.logistics.proyect.group5.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -23,6 +31,132 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryService categoryService;
+    private final CloudinaryService cloudinaryService;
+
+    public List<ProductResponse> listActive() {
+        return toResponses(productRepository.findByActiveTrueOrderByCreatedAtDesc());
+    }
+
+    public List<ProductResponse> listAll() {
+        return toResponses(productRepository.findAllByOrderByCreatedAtDesc());
+    }
+
+    public ProductResponse get(UUID id) {
+        return toResponse(productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + id)), null);
+    }
+
+    @Transactional
+    public ProductResponse create(ProductRequest request, MultipartFile file) {
+        String name = normalizeText(request.getName());
+        if (name.isBlank()) {
+            throw new IllegalArgumentException("El nombre del producto es obligatorio.");
+        }
+        if (request.getPrice() == null || request.getPrice().compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("El precio debe ser mayor o igual a cero.");
+        }
+        if (request.getStock() != null && request.getStock() < 0) {
+            throw new IllegalArgumentException("El stock debe ser mayor o igual a cero.");
+        }
+
+        String imageUrl = resolveImage(request.getImageUrl(), file, true);
+        String sku = resolveAutomaticSku(request.getSku(), name, null);
+        String slug = resolveAutomaticSlug(request.getSlug(), name, null);
+
+        Product product = Product.builder()
+                .sku(sku)
+                .name(name)
+                .slug(slug)
+                .description(normalizeOptionalText(request.getDescription()))
+                .price(request.getPrice())
+                .stock(request.getStock() == null ? 0 : request.getStock())
+                .category(resolveCategoryId(request.getCategoryId()))
+                .imageUrl(imageUrl)
+                .imageHoverUrl(normalizeOptionalText(request.getImageHoverUrl()))
+                .rating(request.getRating())
+                .reviewsCount(request.getReviewsCount())
+                .newProduct(request.getNewProduct() == null || request.getNewProduct())
+                .active(request.getActive() == null || request.getActive())
+                .build();
+
+        validateProduct(product, true);
+        applyDefaults(product);
+
+        return toResponse(productRepository.save(product), null);
+    }
+
+    @Transactional
+    public ProductResponse update(UUID id, ProductRequest request, MultipartFile file) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + id));
+
+        if (request.getName() != null) {
+            String name = normalizeText(request.getName());
+            if (name.isBlank()) {
+                throw new IllegalArgumentException("El nombre del producto es obligatorio.");
+            }
+            product.setName(name);
+        }
+
+        if (request.getDescription() != null) {
+            product.setDescription(normalizeOptionalText(request.getDescription()));
+        }
+
+        if (request.getPrice() != null) {
+            if (request.getPrice().compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException("El precio no puede ser negativo.");
+            }
+            product.setPrice(request.getPrice());
+        }
+
+        if (request.getStock() != null) {
+            if (request.getStock() < 0) {
+                throw new IllegalArgumentException("El stock no puede ser negativo.");
+            }
+            product.setStock(request.getStock());
+        }
+
+        if (request.getCategoryId() != null) {
+            product.setCategory(resolveCategoryId(request.getCategoryId()));
+        }
+
+        if (request.getSku() != null && !request.getSku().isBlank()) {
+            product.setSku(resolveAutomaticSku(request.getSku(), product.getName(), id));
+        }
+
+        if (request.getSlug() != null && !request.getSlug().isBlank()) {
+            product.setSlug(resolveAutomaticSlug(request.getSlug(), product.getName(), id));
+        }
+
+        if (request.getImageHoverUrl() != null) {
+            product.setImageHoverUrl(normalizeOptionalText(request.getImageHoverUrl()));
+        }
+
+        if (request.getRating() != null) {
+            product.setRating(request.getRating());
+        }
+
+        if (request.getReviewsCount() != null) {
+            product.setReviewsCount(request.getReviewsCount());
+        }
+
+        if (request.getNewProduct() != null) {
+            product.setNewProduct(request.getNewProduct());
+        }
+
+        if (request.getActive() != null) {
+            product.setActive(request.getActive());
+        }
+
+        if ((file != null && !file.isEmpty())
+                || (request.getImageUrl() != null && !request.getImageUrl().isBlank())) {
+            product.setImageUrl(resolveImage(request.getImageUrl(), file, false));
+        }
+
+        validateProduct(product, true);
+
+        return toResponse(productRepository.save(product), null);
+    }
 
     public List<Product> findAll() {
         return productRepository.findAll();
@@ -185,6 +319,115 @@ public class ProductService {
             return "LOW";
         }
         return "OPTIMAL";
+    }
+
+    private Category resolveCategoryId(Integer categoryId) {
+        return categoryId == null ? null : categoryService.findById(categoryId);
+    }
+
+    private String resolveImage(String imageUrl, MultipartFile file, boolean required) {
+        if (file != null && !file.isEmpty()) {
+            return cloudinaryService.uploadImage(file);
+        }
+
+        if (imageUrl != null && !imageUrl.isBlank()) {
+            return imageUrl.trim();
+        }
+
+        if (required) {
+            throw new IllegalArgumentException("La imagen principal del producto es obligatoria.");
+        }
+
+        return null;
+    }
+
+    private String resolveAutomaticSku(String sku, String name, UUID currentId) {
+        String normalized = normalizeSku(sku);
+
+        if (normalized.isBlank()) {
+            String prefix = slugify(name).replace("-", "").toUpperCase(Locale.ROOT);
+            if (prefix.isBlank()) {
+                prefix = "PRODUCT";
+            }
+            prefix = prefix.substring(0, Math.min(prefix.length(), 8));
+            normalized = "NX-" + prefix + "-"
+                    + UUID.randomUUID().toString().substring(0, 4).toUpperCase(Locale.ROOT);
+        }
+
+        String base = normalized;
+        int suffix = 2;
+
+        while (true) {
+            var existing = productRepository.findBySku(normalized);
+            if (existing.isEmpty() || existing.get().getId().equals(currentId)) {
+                return normalized;
+            }
+            String ending = "-" + suffix++;
+            normalized = base.substring(0, Math.min(base.length(), 50 - ending.length())) + ending;
+        }
+    }
+
+    private String resolveAutomaticSlug(String slug, String name, UUID currentId) {
+        String normalized = slug == null || slug.isBlank()
+                ? slugify(name)
+                : slugify(slug);
+
+        if (normalized.isBlank()) {
+            normalized = "producto";
+        }
+
+        String base = normalized;
+        int suffix = 2;
+
+        while (true) {
+            var existing = productRepository.findBySlug(normalized);
+            if (existing.isEmpty() || existing.get().getId().equals(currentId)) {
+                return normalized;
+            }
+            String ending = "-" + suffix++;
+            normalized = base.substring(0, Math.min(base.length(), 220 - ending.length())) + ending;
+        }
+    }
+
+    private List<ProductResponse> toResponses(List<Product> products) {
+        Map<Integer, String> categoryNames = categoryService.findAll().stream()
+                .collect(Collectors.toMap(Category::getId, Category::getName));
+
+        return products.stream()
+                .map(product -> toResponse(product, categoryNames))
+                .toList();
+    }
+
+    private ProductResponse toResponse(Product product, Map<Integer, String> categoryNames) {
+        Integer categoryId = product.getCategoryId();
+
+        String categoryName = null;
+        if (categoryId != null) {
+            categoryName = categoryNames == null
+                    ? categoryService.findById(categoryId).getName()
+                    : categoryNames.get(categoryId);
+        }
+
+        return ProductResponse.builder()
+                .id(product.getId())
+                .sku(product.getSku())
+                .name(product.getName())
+                .slug(product.getSlug())
+                .description(product.getDescription())
+                .price(product.getPrice())
+                .stock(product.getStock())
+                .stockStatus(stockStatus(product.getStock()))
+                .categoryId(categoryId)
+                .categoryName(categoryName)
+                .imageUrl(product.getImageUrl())
+                .imageHoverUrl(product.getImageHoverUrl())
+                .rating(product.getRating())
+                .reviewsCount(product.getReviewsCount())
+                .newProduct(product.isNewProduct())
+                .active(product.isActive())
+                .createdAt(product.getCreatedAt())
+                .updatedAt(product.getUpdatedAt())
+                .build();
     }
 
     private void validateProduct(Product product, boolean requireImage) {

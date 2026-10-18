@@ -1,5 +1,6 @@
 package com.logistics.proyect.group5.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -17,4 +18,15 @@ public class CategoryResponse {
     private Integer parentId;
     private boolean active;
     private LocalDateTime createdAt;
+
+    @JsonProperty("isActive")
+    public boolean getIsActive() {
+        return active;
+    }
+
+    public void setIsActive(Boolean isActive) {
+        if (isActive != null) {
+            this.active = isActive;
+        }
+    }
 }

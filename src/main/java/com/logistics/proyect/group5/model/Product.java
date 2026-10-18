@@ -11,7 +11,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "products", schema = "store_schema")
-@Getter 
+@Getter
 @Setter
 @Builder
 @NoArgsConstructor
@@ -40,7 +40,8 @@ public class Product {
 
     @Min(0)
     @Column(nullable = false)
-    private Integer stock;
+    @Builder.Default
+    private Integer stock = 0;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
@@ -54,7 +55,7 @@ public class Product {
 
     @Column(precision = 3, scale = 2)
     @Builder.Default
-    private BigDecimal rating = BigDecimal.valueOf(5.0);
+    private BigDecimal rating = new BigDecimal("5.00");
 
     @Column(name = "reviews_count")
     @Builder.Default
@@ -74,14 +75,46 @@ public class Product {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    public Integer getCategoryId() {
+        return category == null ? null : category.getId();
+    }
+
+    public void setCategoryId(Integer categoryId) {
+        this.category = categoryId == null
+                ? null
+                : Category.builder().id(categoryId).build();
+    }
+
+    public boolean isNewArrival() {
+        return newProduct;
+    }
+
+    public void setNewArrival(boolean newArrival) {
+        this.newProduct = newArrival;
+    }
+
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
+
         if (createdAt == null) {
             createdAt = now;
         }
+
         if (updatedAt == null) {
             updatedAt = now;
+        }
+
+        if (stock == null) {
+            stock = 0;
+        }
+
+        if (rating == null) {
+            rating = new BigDecimal("5.00");
+        }
+
+        if (reviewsCount == null) {
+            reviewsCount = 0;
         }
     }
 
