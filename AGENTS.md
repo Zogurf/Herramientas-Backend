@@ -10,7 +10,7 @@ API REST construida con Java 21, Spring Boot 4.1.1 y Maven. Incluye autenticaci�
 - **Autenticación:** Spring Security, JWT (`jjwt` 0.12.5) y BCrypt; login con Google verificando el `id_token` contra `google.client-id` en `AuthService.loginWithGoogle`.
 - **Archivos:** Cloudinary.
 - **Correo:** Spring Mail / SMTP para recuperación de contraseña.
-- **Despliegue local/contenedor:** Dockerfile multi-stage y Docker Compose, que incluye PostgreSQL local opcional y pgAdmin.
+- **Despliegue local/contenedor:** Dockerfile multi-stage y Docker Compose, que incluye PostgreSQL local opcional y pgAdmin. El despliegue en la nube (Render) queda descrito por `render.yaml` (Blueprint del servicio Docker y de sus variables) y `DEPLOY-RENDER.md` (checklist de puesta en marcha).
 
 ## 2. Estructura del código
 
@@ -19,10 +19,14 @@ Herramientas-Backend/
 ├── pom.xml
 ├── Dockerfile
 ├── docker-compose.yml
+├── render.yaml                       # Blueprint de Render: servicio Docker y variables de entorno
+├── DEPLOY-RENDER.md                  # Checklist de despliegue en Render
+├── .env.example                      # Plantilla de variables de entorno (solo placeholders)
 ├── init.sql                          # Inicialización PostgreSQL local y datos iniciales
 ├── src/main/resources/
 │   ├── application.properties        # Puerto, contexto /api, única fuente de ddl-auto y variables de entorno
 │   ├── application.yml               # Nombre de app, datasource JPA, default_schema y JWT (sin ddl-auto ni contexto)
+│   ├── application-local.properties  # Perfil `local` (ignorado por git); no activarlo contra la base administrada
 │   └── schema.sql                    # Esquemas de autenticación, catálogo y paquetería (+ migración idempotente)
 └── src/main/java/com/logistics/proyect/group5/
     ├── Application.java
@@ -95,6 +99,8 @@ Las credenciales y valores de entorno deben permanecer fuera del código y de lo
 
 **Configuración de Spring repartida en dos archivos (ya sin contradicciones):** `application.properties` define el contexto `/api` y es la **única fuente** de `ddl-auto` (predeterminado `none`, sobrescribible con `SPRING_JPA_HIBERNATE_DDL_AUTO`); `application.yml` define el nombre de la app, el datasource, `hibernate.default_schema: auth_schema`, `format_sql` y JWT, y **ya no declara** `ddl-auto`. No hay dos valores distintos de `ddl-auto`, por lo que se eliminó la ambigüedad previa. El esquema SQL (`schema.sql` / `init.sql`) es la fuente de verdad: incluye `provider` / `provider_id` en `auth_schema.users`, bloques de reconciliación idempotentes para bases existentes (columnas de `users`, RBAC y catálogo `store_schema`) y `schema.sql` puede re-ejecutarse sin error (los tipos `ENUM` se crean de forma idempotente); `init.sql` es un script de arranque único para la base local. Al cambiar configuración, verifica el perfil y las propiedades efectivas.
 
+**Archivo de perfil local (no versionado):** `src/main/resources/application-local.properties` replica los valores del `.env` para el perfil `local` y está correctamente ignorado por git (`.gitignore`), sin historial ni copia en el repositorio remoto. **Ojo:** trae `SPRING_JPA_HIBERNATE_DDL_AUTO=update`, de modo que activarlo contra la base administrada haría que Hibernate alterase el esquema de producción. Hoy no hay ninguna referencia a `spring.profiles.active=local` en el código, así que solo se aplica si se activa a mano.
+
 **Ojo con `store_schema` en la base administrada:** sus tablas se crearon en algún momento desde entidades Hibernate, por lo que `categories.id` no tenía identidad y faltaban los `DEFAULT` declarados en `schema.sql`. El bloque de reconciliación del catálogo (en ambos scripts) los restaura de forma idempotente; si añades columnas nuevas al catálogo, aplícalas también ahí.
 
 El proyecto utiliza InsForge como PostgreSQL administrado cuando `SPRING_DATASOURCE_URL` apunta a ese servicio. La CLI de InsForge se configura por separado en `.insforge/project.json`; nunca copies credenciales de aplicación o CLI a esta guía.
@@ -108,7 +114,7 @@ El grafo interactivo está en `graphify-out/graph.html`; el análisis fechado m�
 3. **Catálogo e imágenes:** `ProductController`/`ProductService`, `CategoryController`/`CategoryService`, `Product`, `Category`, `ProductRepository`, `CategoryRepository`, `CloudinaryService` y `CloudinaryConfig`.
 4. **Seguridad:** `SecurityConfig`, `JwtAuthenticationFilter`, `JwtTokenProvider`, `CustomUserDetailsService` y `PasswordEncoderConfig`.
 
-El grafo **aún no incluye** el CRUD de catálogo ni la autorización por rol añadidos después de su generación (commit `d508dd18`); vuelve a generarlo si necesitas el mapa actualizado.
+El grafo **aún no incluye** el CRUD de catálogo, la autorización por rol ni el CORS configurable de `CorsConfig`, añadidos después de su generación (commit `d508dd18`); el HEAD está ya muy por delante, así que vuelve a generarlo si necesitas el mapa actualizado.
 
 Usa el HTML para inspeccionar nodos, archivos de origen y conexiones al modificar o ampliar una de estas áreas.
 
