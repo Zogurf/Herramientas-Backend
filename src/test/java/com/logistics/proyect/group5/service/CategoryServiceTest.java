@@ -20,11 +20,36 @@ class CategoryServiceTest {
     @Mock
     private CategoryRepository categoryRepository;
 
+    @Mock
+    private com.logistics.proyect.group5.repository.ProductRepository productRepository;
+
     private CategoryService categoryService;
 
     @BeforeEach
     void setUp() {
-        categoryService = new CategoryService(categoryRepository, mock(com.logistics.proyect.group5.repository.ProductRepository.class));
+        categoryService = new CategoryService(categoryRepository, productRepository);
+    }
+
+    @Test
+    void cannotDeleteCategoryUsedByInventory() {
+        Category category = Category.builder().id(1).name("Herramientas").build();
+        when(categoryRepository.findById(1)).thenReturn(Optional.of(category));
+        when(productRepository.existsByCategoryId(1)).thenReturn(true);
+
+        assertThrows(IllegalArgumentException.class, () -> categoryService.delete(1));
+        verify(categoryRepository, never()).delete(any(Category.class));
+    }
+
+    @Test
+    void publicCatalogGeneratesUniqueSlug() {
+        var request = com.logistics.proyect.group5.dto.CategoryRequest.builder()
+                .name("Herramientas").build();
+        when(categoryRepository.findBySlug("herramientas"))
+                .thenReturn(Optional.of(Category.builder().id(1).slug("herramientas").build()));
+        when(categoryRepository.findBySlug("herramientas-2")).thenReturn(Optional.empty());
+        when(categoryRepository.save(any(Category.class))).thenAnswer(call -> call.getArgument(0));
+
+        assertEquals("herramientas-2", categoryService.create(request).getSlug());
     }
 
     @Test
