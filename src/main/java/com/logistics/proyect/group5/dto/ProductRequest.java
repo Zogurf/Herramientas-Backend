@@ -1,19 +1,15 @@
 package com.logistics.proyect.group5.dto;
 
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PositiveOrZero;
-import jakarta.validation.constraints.Size;
-import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonAlias;
+import jakarta.validation.constraints.*;
+import lombok.*;
 
 import java.math.BigDecimal;
 
-/**
- * Datos de entrada para crear o actualizar un producto.
- * Se enlaza tanto desde {@code multipart/form-data} como desde JSON.
- */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class ProductRequest {
 
     @NotBlank(message = "El nombre del producto es obligatorio")
@@ -32,7 +28,7 @@ public class ProductRequest {
     @DecimalMin(value = "0.0", inclusive = true, message = "El precio no puede ser negativo")
     private BigDecimal price;
 
-    @PositiveOrZero(message = "El stock no puede ser negativo")
+    @Min(value = 0, message = "El stock no puede ser negativo")
     private Integer stock;
 
     private Integer categoryId;
@@ -41,7 +37,32 @@ public class ProductRequest {
 
     private String imageHoverUrl;
 
-    private Boolean isNew;
+    @DecimalMin("0.0")
+    @DecimalMax("5.0")
+    private BigDecimal rating;
 
-    private Boolean isActive;
+    @Min(0)
+    private Integer reviewsCount;
+
+    @JsonAlias("isNew")
+    private Boolean newProduct;
+
+    @JsonAlias("isActive")
+    private Boolean active;
+
+    public Boolean getIsNew() {
+        return newProduct;
+    }
+
+    public void setIsNew(Boolean isNew) {
+        this.newProduct = isNew;
+    }
+
+    public Boolean getIsActive() {
+        return active;
+    }
+
+    public void setIsActive(Boolean isActive) {
+        this.active = isActive;
+    }
 }
