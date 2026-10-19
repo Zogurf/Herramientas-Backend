@@ -98,7 +98,7 @@ No las escribas en el repo: el dashboard las pedirá una sola vez.
 | `GOOGLE_CLIENT_ID` | Google Cloud → Credenciales → OAuth 2.0 Client ID |
 | `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` | Meta for Developers → tu app → *Configuración básica*. Son el **App ID** y el **App Secret**. El endpoint responde `400` mientras estén vacías. |
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | Cuenta de Gmail + contraseña de aplicación |
-| `FRONTEND_URL` | URL del frontend en Render, **sin barra final** |
+| `FRONTEND_URL` | URL del frontend en Vercel (`https://herramientas-front-d9oe.vercel.app`), **sin barra final** |
 | `CORS_ALLOWED_ORIGINS` | La misma URL del frontend, **sin barra final** |
 | `JWT_SECRET`, `JWT_EXPIRATION`, `SPRING_JPA_HIBERNATE_DDL_AUTO` | Ya generados/fijados por el blueprint |
 
@@ -106,7 +106,7 @@ No las escribas en el repo: el dashboard las pedirá una sola vez.
 
 | Variable | Valor |
 |---|---|
-| `NEXT_PUBLIC_API_URL` | URL del backend **incluyendo `/api`**: `https://nexora-backend.onrender.com/api` |
+| `NEXT_PUBLIC_API_URL` | URL del backend **incluyendo `/api`**: `https://herramientas-backend-fjmk.onrender.com/api` |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | El **mismo** Client ID que el backend |
 | `NEXT_PUBLIC_FACEBOOK_CLIENT_ID` | El **mismo** App ID de Meta que el backend (nunca el App Secret) |
 
@@ -114,21 +114,42 @@ No las escribas en el repo: el dashboard las pedirá una sola vez.
 
 Mientras la app de Meta siga en modo **Desarrollo**, solo pueden iniciar sesión las
 cuentas con un rol en ella (administradores y *testers*). Para que cualquiera pueda
-usar «Iniciar sesión con Facebook» hay que **publicarla**, y Meta exige dos URLs
-públicas. Ya están implementadas en el frontend:
+usar «Iniciar sesión con Facebook» hay que **publicarla**, y Meta exige una URL pública
+de política de privacidad (las condiciones del servicio son opcionales). Las tres
+páginas ya están implementadas en el frontend; son públicas, sin sesión y se sirven
+como HTML estático. Meta rechaza la URL si redirige a un login.
 
-| Campo de Meta | URL a pegar (con tu dominio real) |
+| Campo de Meta | URL a pegar |
 |---|---|
-| URL de la política de privacidad | `https://<frontend>.onrender.com/privacidad` |
-| URL de instrucciones para la eliminación de datos | `https://<frontend>.onrender.com/eliminacion-de-datos` |
+| URL de la política de privacidad | `https://herramientas-front-d9oe.vercel.app/privacidad` |
+| URL de instrucciones para la eliminación de datos | `https://herramientas-front-d9oe.vercel.app/eliminacion-de-datos` |
+| URL de las condiciones del servicio *(opcional)* | `https://herramientas-front-d9oe.vercel.app/terms` |
 
-Ambas son públicas, sin sesión y se sirven como HTML estático. Meta rechaza la URL
-si redirige a un login.
+Resto de **Configuración básica**:
 
-> Si el backend y el frontend no se llaman `nexora-backend` / `nexora-frontend`,
-> ajusta las URLs. Si prefieres otro nombre de servicio, cámbialo en `render.yaml`
-> **antes** de crearlo: renombrar después cambia la URL y obliga a actualizarla en
-> tres sitios (frontend, CORS y Google Cloud).
+| Campo de Meta | Valor |
+|---|---|
+| Dominios de la app | `herramientas-front-d9oe.vercel.app` |
+| URL del sitio | `https://herramientas-front-d9oe.vercel.app` |
+| URIs de redireccionamiento de OAuth válidas | `https://herramientas-front-d9oe.vercel.app/` |
+
+Puntos que suelen bloquear esta pantalla:
+
+- **Dominios de la app** pide el dominio *desnudo*: sin `https://`, sin barra final y
+  sin ruta. El `example.com` que Meta muestra en el campo es un ejemplo, **no** un
+  requisito de terminar en `.com`; `herramientas-front-d9oe.vercel.app` (TLD `.app`)
+  es perfectamente válido.
+- El dominio debe ser el del **frontend**, no el del backend: `FB.login()` se ejecuta
+  en el navegador sobre la página de Vercel y Meta valida ese origen. Añadir el
+  backend no habilita el inicio de sesión.
+- Para probar en local, añade `localhost` como dominio de la app.
+- El **App Secret** vive solo en el backend (`FACEBOOK_CLIENT_SECRET`): nunca se pega
+  en el frontend ni en Vercel.
+- Estas URLs devuelven `404` mientras el commit que crea las páginas no esté
+  desplegado en el frontend. Compruébalo antes de pegarlas en Meta.
+
+> El backend sí se despliega en Render: si renombras el servicio, cambia su URL y hay
+> que actualizarla en tres sitios (frontend, CORS y Google Cloud).
 
 ---
 
