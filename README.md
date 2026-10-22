@@ -3,8 +3,14 @@
 API REST para autenticación, catálogo de productos, inventario administrativo y seguimiento de pedidos. Desarrollada como parte del proyecto Herramientas.
 
 - **API desplegada:** <https://herramientas-backend-fjmk.onrender.com/api>
+
 - **Frontend:** <https://herramientas-front-d9oe.vercel.app>
-- **Guía de despliegue:** [DEPLOY-RENDER.md](DEPLOY-RENDER.md)
+
+> ⚠️ **Nota de seguridad / Credenciales de prueba:**
+> * **Correo:** admin.demo@nexora.test
+> * **Contraseña:** NxAdmin-sH0Yk8lA5yJGAv
+> 
+> 
 
 ## Tecnologías
 
