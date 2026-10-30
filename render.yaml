@@ -20,10 +20,11 @@ services:
     dockerContext: .
     autoDeployTrigger: commit # Redeploy automático con cada push a `dev`.
 
-    # healthCheckPath: /api/actuator/health
-    #   ↑ DESCOMENTAR SOLO si se añade Spring Boot Actuator Y se permite la ruta
-    #     en SecurityConfig. Hoy /api/actuator/health responde 403 y el deploy
-    #     fallaría el health check. Sin esta línea Render usa sonda TCP (funciona).
+    # Sonda de Render: usa el grupo de liveness de Actuator, no el estado global.
+    # /health devuelve 503 si la base de datos no responde, y Render reiniciaría
+    # el servicio en bucle por un fallo ajeno. /health/liveness solo comprueba
+    # que el proceso está vivo.
+    healthCheckPath: /api/actuator/health/liveness
 
     envVars:
       # ---------------------------------------------------------------------
@@ -113,4 +114,26 @@ services:
       # Valor: URL del frontend, sin barra final.
       # Ej.: https://nexora-frontend.onrender.com  o  https://*.onrender.com
       - key: CORS_ALLOWED_ORIGINS
+        sync: false
+
+      # ---------------------------------------------------------------------
+      # Observabilidad · Actuator (HTTP Basic) y push OTLP a Grafana Cloud
+      # ---------------------------------------------------------------------
+      # /api/actuator/health (y /health/liveness) es público; el resto de
+      # endpoints, incluido /api/actuator/prometheus, exige estas credenciales
+      # con rol MONITOR. Si faltan, Actuator responde 401 (falla cerrado).
+      # Usa una contraseña fuerte y DISTINTA de la local.
+      - key: MANAGEMENT_USER
+        sync: false
+      - key: MANAGEMENT_PASSWORD
+        sync: false
+
+      # Push de métricas a Grafana Cloud (no hay Prometheus en Render).
+      - key: OTLP_ENABLED
+        value: "true"
+      # Endpoint OTLP de tu stack: https://otlp-gateway-<region>.grafana.net/otlp/v1/metrics
+      - key: OTLP_URL
+        sync: false
+      # Cabecera Authorization completa: "Basic <base64(instanceID:token)>"
+      - key: OTLP_AUTH
         sync: false

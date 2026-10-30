@@ -46,5 +46,50 @@ services:
     depends_on:
       - postgres
 
+  # ===========================================================================
+  # Observabilidad local: Prometheus (scrape) + Grafana (dashboards).
+  # En producción NO se usan: el backend empuja métricas a Grafana Cloud.
+  # ===========================================================================
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    container_name: nexora_prometheus
+    restart: always
+    # Prometheus no expande variables de entorno en su YAML: el script genera
+    # la configuración con las credenciales de .env en cada arranque.
+    entrypoint: ["/bin/sh", "/etc/prometheus/render-config.sh"]
+    env_file:
+      - .env
+    volumes:
+      - ./observability/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      # Permite scrapear el backend que corre en el host con ./mvnw
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    container_name: nexora_grafana
+    restart: always
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      # 3000 queda para el frontend; Grafana escucha en 3001.
+      - "3001:3000"
+    depends_on:
+      - prometheus
+
 volumes:
   postgres_data:
+  prometheus_data:
+  grafana_data:

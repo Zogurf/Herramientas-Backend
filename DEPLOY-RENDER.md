@@ -61,7 +61,7 @@ El blueprint define:
 | `plan` | `free` | 0.1 CPU / 512 MB. Ver troubleshooting de memoria. |
 | `region` | `virginia` | US East, la más cercana a la base InsForge (`us-east`). |
 | `PORT` | *(no se define)* | Render lo inyecta (default 10000) y la app lo respeta. |
-| `healthCheckPath` | *(omitido)* | **A propósito**: `/api/actuator/health` da 403 hoy. |
+| `healthCheckPath` | `/api/actuator/health/liveness` | Sonda de Actuator: solo comprueba que el proceso vive. La ruta pública `/api/actuator/health` devolvería `503` si InsForge no responde y Render reiniciaría en bucle. |
 | `JWT_SECRET` | `generateValue` | Render genera un secreto aleatorio de 256 bits. |
 
 ---
@@ -100,6 +100,8 @@ No las escribas en el repo: el dashboard las pedirá una sola vez.
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | Cuenta de Gmail + contraseña de aplicación |
 | `FRONTEND_URL` | URL del frontend en Vercel (`https://herramientas-front-d9oe.vercel.app`), **sin barra final** |
 | `CORS_ALLOWED_ORIGINS` | La misma URL del frontend, **sin barra final** |
+| `MANAGEMENT_USER` / `MANAGEMENT_PASSWORD` | Credenciales de HTTP Basic para `/api/actuator/prometheus`. Contraseña fuerte y **distinta de la local**; si faltan, Actuator responde 401. |
+| `OTLP_ENABLED` / `OTLP_URL` / `OTLP_AUTH` | Push de métricas a Grafana Cloud. Ver «Observabilidad en producción». |
 | `JWT_SECRET`, `JWT_EXPIRATION`, `SPRING_JPA_HIBERNATE_DDL_AUTO` | Ya generados/fijados por el blueprint |
 
 ### Frontend
@@ -173,6 +175,12 @@ curl -s -X POST "$API/api/v1/auth/facebook" \
 curl -s -i -X OPTIONS "$API/api/v1/auth/login" \
   -H "Origin: https://<frontend>.onrender.com" \
   -H 'Access-Control-Request-Method: POST' | head -20
+
+# Actuator: la sonda de Render es pública y el resto exige Basic auth.
+curl -s -o /dev/null -w '%{http_code}\n' "$API/api/actuator/health/liveness"  # 200
+curl -s -o /dev/null -w '%{http_code}\n' "$API/api/actuator/prometheus"       # 401
+curl -s -o /dev/null -w '%{http_code}\n' -u "<MANAGEMENT_USER>:<MANAGEMENT_PASSWORD>" \
+  "$API/api/actuator/prometheus"                                              # 200
 ```
 
 Si el preflight devuelve **403** y sin cabecera `access-control-allow-origin`,
@@ -192,7 +200,44 @@ curl -s -o /dev/null -w '%{http_code}\n' "https://<frontend>.onrender.com/elimin
 
 ---
 
-## 5. Cuenta de GitHub y auto-deploy
+## 5. Observabilidad en producción (Grafana Cloud)
+
+En Render **no** se autohospedan Prometheus ni Grafana: el plan Free no tiene
+discos persistentes y suspende el servicio a los 15 minutos, así que la serie
+temporal se perdería en cada redeploy. En su lugar, el backend **empuja** las
+métricas por OTLP a un stack gratuito de Grafana Cloud.
+
+```
+Render (nexora-backend) ──OTLP/HTTPS──> Grafana Cloud (Prometheus + Grafana)
+```
+
+Pasos (una sola vez):
+
+- [ ] Crear un *stack* gratuito en Grafana Cloud.
+- [ ] Copiar el endpoint **OTLP** de la región asignada:
+      `https://otlp-gateway-<region>.grafana.net/otlp/v1/metrics`.
+- [ ] Crear un token con permiso `metrics:write`.
+- [ ] Calcular la cabecera: `printf '%s' '<instanceID>:<token>' | base64 -w0`
+      y prefijarla con `Basic `.
+- [ ] Definir en Render: `OTLP_ENABLED=true`, `OTLP_URL`, `OTLP_AUTH`,
+      `MANAGEMENT_USER` y `MANAGEMENT_PASSWORD` (contraseña distinta de la local).
+- [ ] Redeploy y, en Grafana Cloud → Explore, buscar
+      `http_server_requests_seconds_count` para confirmar que llegan datos
+      (el primer envío tarda hasta 60 s).
+
+Notas:
+
+- El intervalo de envío es de **60 s** (`management.otlp.metrics.export.step`).
+- Los dashboards locales consultan `_bucket` del scrape; en Cloud algunos
+  sufijos cambian (`_total`). Ajusta los paneles de producción por separado.
+- `/api/actuator/prometheus` sigue existiendo en Render, pero protegido con
+  Basic auth: sirve para diagnosticar sin depender de la nube.
+- El plan gratuito de Grafana Cloud limita las series activas y la retención;
+  comprueba los límites vigentes al crear el stack.
+
+---
+
+## 6. Cuenta de GitHub y auto-deploy
 
 Los repos son **públicos**, así que se pueden desplegar sin ser colaborador. Pero
 Render **solo ofrece auto-deploy** (redeploy con cada push) si el servicio está
@@ -204,7 +249,7 @@ pública, cada actualización exige un deploy manual.
 
 ---
 
-## 6. Limitaciones conocidas del plan Free
+## 7. Limitaciones conocidas del plan Free
 
 | Limitación | Consecuencia |
 |---|---|
@@ -216,7 +261,7 @@ pública, cada actualización exige un deploy manual.
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 **El contenedor muere por memoria (OOM) o arranca lento.**
 `JAVA_OPTS` usa `-XX:MaxRAMPercentage=75.0`, que en 512 MB reserva 384 MB de heap
@@ -224,8 +269,17 @@ y deja ~128 MB para el resto de la JVM. Si aparece, bajarlo a `60.0`–`65.0` en
 `Dockerfile`, o subir el plan a `1c-2g` (2 GB).
 
 **El deploy falla el health check.**
-No añadir `healthCheckPath` al backend hasta que exista Actuator. La sonda TCP
-por defecto funciona (comprobado: la app arranca y sirve en ~7 s).
+La sonda es `/api/actuator/health/liveness`, que responde `200` siempre que el
+proceso esté vivo, aunque InsForge no responda. Si falla, revisa los logs de
+arranque: un `Could not resolve placeholder` o un `APPLICATION FAILED TO START`
+indica una variable de entorno ausente. No cambies la ruta a `/api/actuator/health`:
+esa devuelve `503` cuando la base de datos no responde y provoca reinicios en bucle.
+
+**No llegan métricas a Grafana Cloud.**
+Comprobar en este orden: `OTLP_ENABLED=true`; que `OTLP_URL` apunte al endpoint
+`/otlp/v1/metrics` del stack (no al de Grafana ni al de Prometheus); y que
+`OTLP_AUTH` sea `Basic <base64(instanceID:token)>` con un token que tenga
+`metrics:write`. El primer envío puede tardar 60 s.
 
 **El correo de recuperación no llega.**
 Ver la tabla del plan Free. `EmailService` no propaga el error, así que revisa los
@@ -260,7 +314,7 @@ Un `NEXT_PUBLIC_*` mal puesto obliga a **redeployar**, no solo reiniciar.
 
 ---
 
-## 8. Propiedad y continuidad
+## 9. Propiedad y continuidad
 
 - El despliegue pertenece a la cuenta de Render de quien lo crea: esa persona
   administra logs, variables y borrado. Para compartir el control hay que

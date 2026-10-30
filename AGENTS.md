@@ -23,6 +23,10 @@ Herramientas-Backend/
 ├── DEPLOY-RENDER.md                  # Checklist de despliegue en Render
 ├── .env.example                      # Plantilla de variables de entorno (solo placeholders)
 ├── init.sql                          # Inicialización PostgreSQL local y datos iniciales
+├── observability/                    # Prometheus + Grafana locales (ver observability/README.md)
+│   ├── prometheus/render-config.sh   # Genera la config del scrape desde .env
+│   ├── grafana/                      # Provisioning (datasource, dashboards, alertas) y dashboard JSON
+│   └── scripts/allow-docker-to-backend.sh  # Regla de UFW para el scrape en Linux
 ├── src/main/resources/
 │   ├── application.properties        # Puerto, contexto /api, única fuente de ddl-auto y variables de entorno
 │   ├── application.yml               # Nombre de app, datasource JPA, default_schema y JWT (sin ddl-auto ni contexto)
@@ -86,6 +90,18 @@ Campos aceptados al crear/actualizar un producto: `name` (obligatorio), `price` 
 
 Los controladores devuelven `ResponseEntity`. El registro responde `201 CREATED`; las consultas y acciones satisfactorias responden `200 OK`. Los errores usan `400` (validación o regla de negocio), `403` (sin permisos o sin token), `404` (recurso inexistente) y `401` (credenciales inválidas).
 
+### Actuator (observabilidad)
+
+`spring-boot-starter-actuator` está activo y se expone bajo el contexto habitual, es decir `/api/actuator/*`. `SecurityConfig` le dedica una cadena propia (`@Order(1)`, `securityMatcher("/actuator/**")`) sin el filtro JWT:
+
+| Método | Ruta | Acceso | Función |
+|---|---|---|---|
+| `GET` | `/api/actuator/health` y `/health/**` | público | Sonda de Render (`health/liveness`) y estado global |
+| `GET` | `/api/actuator/info` | público | Información de la aplicación |
+| `GET` | `/api/actuator/prometheus` | Basic auth, rol `MONITOR` | Métricas para el scrape local |
+
+Las credenciales salen de `MANAGEMENT_USER` / `MANAGEMENT_PASSWORD` (`monitoring.user` / `monitoring.password`). Si falta cualquiera, esa cadena falla cerrada con `401` y no recurre a credenciales por defecto. El proveedor se registra solo en el `AuthenticationManager` de la cadena de Actuator, así que no interfiere con el login de usuarios de la base.
+
 ## 4. Dominio y flujo de autenticación
 
 - `User` implementa `UserDetails`, tiene identificador UUID y se almacena en `auth_schema.users`. El rol se resuelve vía RBAC (`auth_schema.user_roles` → `auth_schema.roles`): los nombres de rol se almacenan **sin** el prefijo `ROLE_` (ese prefijo es una convención de authorities de Spring y lo añade `User#getAuthorities()`), y toda cuenta nueva **persiste explícitamente su fila `CLIENTE`** al crearse (alta local y primer login social) para que `user_roles` sea la única fuente de verdad; el auto-registro no acepta rol. Si un usuario no tuviera ninguna fila de rol, `CLIENTE` se usa como red de seguridad. Las columnas `provider` (`LOCAL`/`GOOGLE`/`FACEBOOK`) y `provider_id` registran la identidad social usada. El rol se lee con una `@Formula` que, si el usuario tiene varias filas, resuelve de forma **determinista** al de mayor privilegio (`ADMIN` > `REPARTIDOR` > resto); como `JwtAuthenticationFilter` vuelve a cargar el usuario desde la base en cada petición, un cambio de rol surte efecto sin volver a iniciar sesión.
@@ -105,6 +121,8 @@ Las credenciales y valores de entorno deben permanecer fuera del código y de lo
 **Ojo con `store_schema` en la base administrada:** sus tablas se crearon en algún momento desde entidades Hibernate, por lo que `categories.id` no tenía identidad y faltaban los `DEFAULT` declarados en `schema.sql`. El bloque de reconciliación del catálogo (en ambos scripts) los restaura de forma idempotente; si añades columnas nuevas al catálogo, aplícalas también ahí.
 
 El proyecto utiliza InsForge como PostgreSQL administrado cuando `SPRING_DATASOURCE_URL` apunta a ese servicio. La CLI de InsForge se configura por separado en `.insforge/project.json`; nunca copies credenciales de aplicación o CLI a esta guía.
+
+**Observabilidad:** conviven dos registries de Micrometer. `micrometer-registry-prometheus` sirve el scrape local en `/api/actuator/prometheus`; `micrometer-registry-otlp` empuja a Grafana Cloud y está **apagado por defecto** (`management.otlp.metrics.export.enabled=${OTLP_ENABLED:false}`). En local, `docker compose up -d prometheus grafana` levanta Prometheus (`:9090`) y Grafana (`:3001`, porque el 3000 es del frontend) con datasource, dashboard y alertas aprovisionados; el detalle está en `observability/README.md`. Prometheus no expande variables en su YAML, por eso `observability/prometheus/render-config.sh` genera la configuración con `PROM_USER`, `PROM_PASS` y `PROM_TARGET` (este último permite alternar entre `host.docker.internal:8080` y `backend:8080`). En Linux con UFW los contenedores no alcanzan los puertos del host: hay que aplicar una vez `sudo observability/scripts/allow-docker-to-backend.sh`. En Render no se autohospeda nada (plan Free sin discos persistentes y con spin-down): el blueprint activa el push OTLP y usa `/api/actuator/health/liveness` como sonda para no reiniciar el servicio cuando falla la base de datos.
 
 ## 6. Mapa de dependencias (Graphify)
 
