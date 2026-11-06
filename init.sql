@@ -296,6 +296,12 @@ CREATE TABLE IF NOT EXISTS package_schema.packages (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Reconciliación idempotente del registro de paquetes para bases existentes.
+ALTER TABLE package_schema.packages ADD COLUMN IF NOT EXISTS sender_name VARCHAR(150);
+ALTER TABLE package_schema.packages ADD COLUMN IF NOT EXISTS sender_phone VARCHAR(20);
+ALTER TABLE package_schema.packages ADD COLUMN IF NOT EXISTS description TEXT;
+CREATE SEQUENCE IF NOT EXISTS package_schema.tracking_code_seq START WITH 100000;
+
 CREATE INDEX idx_packages_tracking ON package_schema.packages(tracking_code);
 CREATE INDEX idx_packages_sender ON package_schema.packages(sender_id);
 CREATE INDEX idx_packages_courier ON package_schema.packages(courier_id);
