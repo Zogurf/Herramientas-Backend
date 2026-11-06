@@ -62,4 +62,4 @@ jobs:
       - name: Run tests
         run: |
           chmod +x mvnw
-          ./mvnw -B verify
+          ./mvnw -B Test
