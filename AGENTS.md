@@ -38,7 +38,10 @@ Herramientas-Backend/
     ├── controller/
     │   ├── AuthController.java       # Sesión, cuenta, perfil, recuperación de contraseña y login con Google/Facebook
     │   ├── ProductController.java    # CRUD del catálogo (lectura pública; escritura solo ADMIN)
-    │   └── CategoryController.java   # CRUD de categorías (lectura pública; escritura solo ADMIN)
+    │   ├── CategoryController.java   # CRUD de categorías (lectura pública; escritura solo ADMIN)
+    │   ├── AdminProductController.java   # Inventario admin: listado paginado, métricas y exportaciones
+    │   ├── AdminCategoryController.java  # Gestión admin de categorías
+    │   └── TrackingController.java   # Historial de tracking público y registro de eventos (ADMIN)
     ├── dto/                          # Peticiones y respuestas de auth, perfil, recuperación, Google, Facebook y catálogo
     ├── exception/                    # Respuestas globales de errores, validación y ResourceNotFoundException
     ├── model/                        # User, Product (store_schema), Category, PasswordResetToken y enums
@@ -88,6 +91,42 @@ Las entidades `Product` y `Category` mapean **`store_schema`** (`ddl-auto=none`;
 
 Campos aceptados al crear/actualizar un producto: `name` (obligatorio), `price` (obligatorio, ≥ 0), `stock`, `categoryId`, `sku` y `slug` (se autogeneran si se omiten y se garantiza su unicidad), `description`, `imageUrl` e `imageHoverUrl`. Si se envía el archivo `file` en la petición, se sube a Cloudinary y tiene prioridad sobre `imageUrl`; si no hay archivo ni `imageUrl`, la creación responde `400` porque la columna es `NOT NULL`.
 
+### Administración del catálogo e inventario
+
+`AdminProductController` y `AdminCategoryController` atienden bajo `/admin/**`. `SecurityConfig` exige rol `ADMIN` para todo ese prefijo, así que estos controladores no repiten `@PreAuthorize`. A diferencia del catálogo público, sus altas y ediciones usan **JSON** (`ProductRequest` / `CategoryRequest`); las imágenes se suben en un endpoint aparte como `multipart/form-data`.
+
+| Método | Ruta | Función |
+|---|---|---|
+| `GET` | `/api/admin/products` | Listado simple con filtros `search`, `categoryId`, `activeOnly` |
+| `GET` | `/api/admin/products/inventory` | Inventario paginado (`page`, `size` ≤ 100, `sortBy`, `direction`, `active`, `stockStatus`) |
+| `GET` | `/api/admin/products/inventory/stats` | Contadores del inventario con los mismos filtros |
+| `GET` | `/api/admin/products/inventory/export.xlsx` | Exportar el inventario filtrado a Excel |
+| `GET` | `/api/admin/products/inventory/export.pdf` | Exportar el inventario filtrado a PDF |
+| `GET` | `/api/admin/products/{id}` | Consultar un producto (UUID) |
+| `POST` | `/api/admin/products` | Crear producto (JSON) |
+| `PUT` | `/api/admin/products/{id}` | Actualizar producto (JSON) |
+| `PATCH` | `/api/admin/products/{id}/deactivate` | Desactivar producto |
+| `DELETE` | `/api/admin/products/{id}` | Eliminar producto y sus imágenes (`204`) |
+| `POST` | `/api/admin/products/{id}/images` | Reemplazar imágenes (`multipart`: `image` obligatorio, `hoverImage` opcional) |
+| `DELETE` | `/api/admin/products/{id}/images/hover` | Quitar la imagen hover |
+| `GET` | `/api/admin/categories` | Listar categorías con `search` y `activeOnly` |
+| `GET` | `/api/admin/categories/{id}` | Consultar una categoría |
+| `POST` | `/api/admin/categories` | Crear categoría (JSON) |
+| `PUT` | `/api/admin/categories/{id}` | Actualizar categoría (JSON) |
+| `PATCH` | `/api/admin/categories/{id}/deactivate` | Desactivar categoría |
+| `DELETE` | `/api/admin/categories/{id}` | Eliminar categoría (`204`; `400` si tiene productos) |
+
+### Tracking
+
+`TrackingController` usa la base `/tracking`:
+
+| Método | Ruta | Acceso | Función |
+|---|---|---|---|
+| `GET` | `/api/tracking/{orderId}` | público | Historial de eventos de un pedido (UUID) |
+| `POST` | `/api/tracking` | ADMIN | Registrar un evento de tracking |
+
+`SecurityConfig` permite `/tracking/**` sin token y el `POST` queda protegido por `@PreAuthorize("hasRole('ADMIN')")`. También permite `/packages/**`, pero **no existe un controlador de paquetes** en el código actual; esa regla queda reservada.
+
 Los controladores devuelven `ResponseEntity`. El registro responde `201 CREATED`; las consultas y acciones satisfactorias responden `200 OK`. Los errores usan `400` (validación o regla de negocio), `403` (sin permisos o sin token), `404` (recurso inexistente) y `401` (credenciales inválidas).
 
 ### Actuator (observabilidad)
@@ -108,7 +147,7 @@ Las credenciales salen de `MANAGEMENT_USER` / `MANAGEMENT_PASSWORD` (`monitoring
 - `PasswordResetToken` se almacena en `auth_schema.password_reset_tokens`, asociado a un usuario, con vencimiento, marca de uso y dirección IP.
 - `AuthService` gestiona inicio/registro, JWT, actualización del perfil, carga del avatar, recuperación de contraseña y los logins sociales con Google (`loginWithGoogle`, verifica el `id_token`) y con Facebook (`loginWithFacebook`, verifica el access token con `debug_token`). Ambos comparten `loginWithSocialUser`, que crea o vincula la cuenta reutilizando el correo existente. `EmailService` construye el enlace usando `app.frontend.url` y envía el correo por SMTP cuando está configurado.
 - `Product` mapea `store_schema.products` (clave UUID) y `Category` mapea `store_schema.categories`; ambos forman el catálogo real que consume la tienda. `ProductService` sube la imagen a Cloudinary, autogenera `sku`/`slug` si faltan y resuelve el nombre de la categoría para la respuesta. `CategoryService` impide borrar una categoría con productos asociados.
-- `SecurityConfig` permite sin token `POST` de auth y los `GET` del catálogo; el resto exige autenticación. La autorización fina de escrituras se hace con `@PreAuthorize("hasRole('ADMIN')")` (method security habilitada). El **CORS tiene una sola fuente**: `CorsConfig`, que expone el bean `CorsConfigurationSource` que consume `SecurityConfig` (`cors(Customizer.withDefaults())`); los orígenes salen de `app.cors.allowed-origins` / `CORS_ALLOWED_ORIGINS` (lista separada por comas, admite patrones como `https://*.onrender.com`) y por defecto permiten `localhost:3000`, `localhost:3001` y `127.0.0.1:3000`. La autorización de paquetes/tracking está preparada en la configuración, pero no se encontraron controladores de esos recursos en el código actual.
+- `SecurityConfig` permite sin token `POST` de auth y los `GET` del catálogo; el resto exige autenticación. La autorización fina de las escrituras del catálogo público se hace con `@PreAuthorize("hasRole('ADMIN')")` (method security habilitada); las rutas `/admin/**` se autorizan por prefijo en `SecurityConfig` (`hasRole('ADMIN')`), sin anotaciones en cada método. El **CORS tiene una sola fuente**: `CorsConfig`, que expone el bean `CorsConfigurationSource` que consume `SecurityConfig` (`cors(Customizer.withDefaults())`); los orígenes salen de `app.cors.allowed-origins` / `CORS_ALLOWED_ORIGINS` (lista separada por comas, admite patrones como `https://*.onrender.com`) y por defecto permiten `localhost:3000`, `localhost:3001` y `127.0.0.1:3000`. `TrackingController` expone el historial en `GET /tracking/{orderId}` (público) y el registro de eventos en `POST /tracking` (ADMIN); `/packages/**` sigue permitido en la configuración pero no tiene controlador.
 
 ## 5. Configuración y operación
 
