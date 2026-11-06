@@ -4,10 +4,10 @@ Este documento describe la estructura vigente del backend para NEXORA STORE & Lo
 
 ## 1. Resumen del sistema
 
-API REST construida con Java 21, Spring Boot 4.1.1 y Maven. Incluye autenticación JWT, inicio de sesión con Google, gestión de usuarios y perfiles, catálogo de productos, subida de imágenes a Cloudinary, recuperación de contraseñas por correo y persistencia PostgreSQL. La configuración permite conectar PostgreSQL administrado por InsForge mediante JDBC; el código backend no usa el SDK `@insforge/sdk`.
+API REST construida con Java 21, Spring Boot 4.1.1 y Maven. Incluye autenticación JWT, inicio de sesión con Google y con Facebook, gestión de usuarios y perfiles, catálogo de productos, subida de imágenes a Cloudinary, recuperación de contraseñas por correo y persistencia PostgreSQL. La configuración permite conectar PostgreSQL administrado por InsForge mediante JDBC; el código backend no usa el SDK `@insforge/sdk`.
 
 - **Persistencia:** PostgreSQL con Spring Data JPA; entidades de autenticación en `auth_schema`.
-- **Autenticación:** Spring Security, JWT (`jjwt` 0.12.5) y BCrypt; login con Google verificando el `id_token` contra `google.client-id` en `AuthService.loginWithGoogle`.
+- **Autenticación:** Spring Security, JWT (`jjwt` 0.12.5) y BCrypt; login con Google verificando el `id_token` contra `google.client-id` (`AuthService.loginWithGoogle`) y login con Facebook verificando el access token contra la Graph API con `debug_token` y las credenciales `facebook.client-id` / `facebook.client-secret` (`AuthService.loginWithFacebook`).
 - **Archivos:** Cloudinary.
 - **Correo:** Spring Mail / SMTP para recuperación de contraseña.
 - **Despliegue local/contenedor:** Dockerfile multi-stage y Docker Compose, que incluye PostgreSQL local opcional y pgAdmin. El despliegue en la nube (Render) queda descrito por `render.yaml` (Blueprint del servicio Docker y de sus variables) y `DEPLOY-RENDER.md` (checklist de puesta en marcha).
@@ -32,10 +32,10 @@ Herramientas-Backend/
     ├── Application.java
     ├── config/                       # JWT, Spring Security, CORS, Cloudinary y BCrypt
     ├── controller/
-    │   ├── AuthController.java       # Sesión, cuenta, perfil, recuperación de contraseña y login con Google
+    │   ├── AuthController.java       # Sesión, cuenta, perfil, recuperación de contraseña y login con Google/Facebook
     │   ├── ProductController.java    # CRUD del catálogo (lectura pública; escritura solo ADMIN)
     │   └── CategoryController.java   # CRUD de categorías (lectura pública; escritura solo ADMIN)
-    ├── dto/                          # Peticiones y respuestas de auth, perfil, recuperación, Google y catálogo
+    ├── dto/                          # Peticiones y respuestas de auth, perfil, recuperación, Google, Facebook y catálogo
     ├── exception/                    # Respuestas globales de errores, validación y ResourceNotFoundException
     ├── model/                        # User, Product (store_schema), Category, PasswordResetToken y enums
     ├── repository/                   # Repositorios JPA de usuarios, productos, categorías y tokens
@@ -55,6 +55,7 @@ Controlador con base `/v1/auth`, por lo que las rutas externas son:
 | `POST` | `/api/v1/auth/login` | Autenticar y emitir JWT |
 | `POST` | `/api/v1/auth/register` | Crear cuenta y emitir JWT |
 | `POST` | `/api/v1/auth/google` | Iniciar sesión con Google (`credential` = ID token de Google) |
+| `POST` | `/api/v1/auth/facebook` | Iniciar sesión con Facebook (`accessToken` emitido por el SDK de Meta) |
 | `POST` | `/api/v1/auth/logout` | Cierre de sesión sin estado en servidor |
 | `GET` | `/api/v1/auth/me` | Consultar el usuario autenticado |
 | `POST` | `/api/v1/auth/forgot-password` | Solicitar enlace de recuperación |
@@ -87,15 +88,15 @@ Los controladores devuelven `ResponseEntity`. El registro responde `201 CREATED`
 
 ## 4. Dominio y flujo de autenticación
 
-- `User` implementa `UserDetails`, tiene identificador UUID y se almacena en `auth_schema.users`. El rol se resuelve vía RBAC (`auth_schema.user_roles` → `auth_schema.roles`): los nombres de rol se almacenan **sin** el prefijo `ROLE_` (ese prefijo es una convención de authorities de Spring y lo añade `User#getAuthorities()`), y toda cuenta nueva **persiste explícitamente su fila `CLIENTE`** al crearse (alta local y primer login con Google) para que `user_roles` sea la única fuente de verdad; el auto-registro no acepta rol. Si un usuario no tuviera ninguna fila de rol, `CLIENTE` se usa como red de seguridad. Las columnas `provider` (`LOCAL`/`GOOGLE`/…) y `provider_id` registran la identidad social usada. El rol se lee con una `@Formula` que, si el usuario tiene varias filas, resuelve de forma **determinista** al de mayor privilegio (`ADMIN` > `REPARTIDOR` > resto); como `JwtAuthenticationFilter` vuelve a cargar el usuario desde la base en cada petición, un cambio de rol surte efecto sin volver a iniciar sesión.
+- `User` implementa `UserDetails`, tiene identificador UUID y se almacena en `auth_schema.users`. El rol se resuelve vía RBAC (`auth_schema.user_roles` → `auth_schema.roles`): los nombres de rol se almacenan **sin** el prefijo `ROLE_` (ese prefijo es una convención de authorities de Spring y lo añade `User#getAuthorities()`), y toda cuenta nueva **persiste explícitamente su fila `CLIENTE`** al crearse (alta local y primer login social) para que `user_roles` sea la única fuente de verdad; el auto-registro no acepta rol. Si un usuario no tuviera ninguna fila de rol, `CLIENTE` se usa como red de seguridad. Las columnas `provider` (`LOCAL`/`GOOGLE`/`FACEBOOK`) y `provider_id` registran la identidad social usada. El rol se lee con una `@Formula` que, si el usuario tiene varias filas, resuelve de forma **determinista** al de mayor privilegio (`ADMIN` > `REPARTIDOR` > resto); como `JwtAuthenticationFilter` vuelve a cargar el usuario desde la base en cada petición, un cambio de rol surte efecto sin volver a iniciar sesión.
 - `PasswordResetToken` se almacena en `auth_schema.password_reset_tokens`, asociado a un usuario, con vencimiento, marca de uso y dirección IP.
-- `AuthService` gestiona inicio/registro, JWT, actualización del perfil, carga del avatar, recuperación de contraseña y el login con Google (`loginWithGoogle`, que verifica el `id_token` y crea o vincula al usuario). `EmailService` construye el enlace usando `app.frontend.url` y envía el correo por SMTP cuando está configurado.
+- `AuthService` gestiona inicio/registro, JWT, actualización del perfil, carga del avatar, recuperación de contraseña y los logins sociales con Google (`loginWithGoogle`, verifica el `id_token`) y con Facebook (`loginWithFacebook`, verifica el access token con `debug_token`). Ambos comparten `loginWithSocialUser`, que crea o vincula la cuenta reutilizando el correo existente. `EmailService` construye el enlace usando `app.frontend.url` y envía el correo por SMTP cuando está configurado.
 - `Product` mapea `store_schema.products` (clave UUID) y `Category` mapea `store_schema.categories`; ambos forman el catálogo real que consume la tienda. `ProductService` sube la imagen a Cloudinary, autogenera `sku`/`slug` si faltan y resuelve el nombre de la categoría para la respuesta. `CategoryService` impide borrar una categoría con productos asociados.
 - `SecurityConfig` permite sin token `POST` de auth y los `GET` del catálogo; el resto exige autenticación. La autorización fina de escrituras se hace con `@PreAuthorize("hasRole('ADMIN')")` (method security habilitada). El **CORS tiene una sola fuente**: `CorsConfig`, que expone el bean `CorsConfigurationSource` que consume `SecurityConfig` (`cors(Customizer.withDefaults())`); los orígenes salen de `app.cors.allowed-origins` / `CORS_ALLOWED_ORIGINS` (lista separada por comas, admite patrones como `https://*.onrender.com`) y por defecto permiten `localhost:3000`, `localhost:3001` y `127.0.0.1:3000`. La autorización de paquetes/tracking está preparada en la configuración, pero no se encontraron controladores de esos recursos en el código actual.
 
 ## 5. Configuración y operación
 
-Las credenciales y valores de entorno deben permanecer fuera del código y de los commits. `application.properties` espera variables como `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `JWT_SECRET`, `MAIL_USERNAME` y `MAIL_PASSWORD`. La URL de frontend se configura con `FRONTEND_URL` (predeterminada a `http://localhost:3000`) y los orígenes permitidos por CORS con `CORS_ALLOWED_ORIGINS` (por defecto, los de desarrollo local). Docker Compose carga un archivo `.env` local.
+Las credenciales y valores de entorno deben permanecer fuera del código y de los commits. `application.properties` espera variables como `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `JWT_SECRET`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `GOOGLE_CLIENT_ID`, `FACEBOOK_CLIENT_ID` y `FACEBOOK_CLIENT_SECRET`. La URL de frontend se configura con `FRONTEND_URL` (predeterminada a `http://localhost:3000`), los orígenes permitidos por CORS con `CORS_ALLOWED_ORIGINS` (por defecto, los de desarrollo local) y `FACEBOOK_API_VERSION` fija la versión de la Graph API (por defecto `v26.0`). Docker Compose carga un archivo `.env` local.
 
 **Configuración de Spring repartida en dos archivos (ya sin contradicciones):** `application.properties` define el contexto `/api` y es la **única fuente** de `ddl-auto` (predeterminado `none`, sobrescribible con `SPRING_JPA_HIBERNATE_DDL_AUTO`); `application.yml` define el nombre de la app, el datasource, `hibernate.default_schema: auth_schema`, `format_sql` y JWT, y **ya no declara** `ddl-auto`. No hay dos valores distintos de `ddl-auto`, por lo que se eliminó la ambigüedad previa. El esquema SQL (`schema.sql` / `init.sql`) es la fuente de verdad: incluye `provider` / `provider_id` en `auth_schema.users`, bloques de reconciliación idempotentes para bases existentes (columnas de `users`, RBAC y catálogo `store_schema`) y `schema.sql` puede re-ejecutarse sin error (los tipos `ENUM` se crean de forma idempotente); `init.sql` es un script de arranque único para la base local. Al cambiar configuración, verifica el perfil y las propiedades efectivas.
 
