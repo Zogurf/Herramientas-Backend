@@ -185,14 +185,13 @@ Usa el HTML para inspeccionar nodos, archivos de origen y conexiones al modifica
 5. Antes de cambiar rutas o reglas de acceso, revisa `server.servlet.context-path` y `SecurityConfig` para considerar el prefijo externo `/api`.
 
 <!-- INSFORGE:START -->
-## InsForge
+## InsForge backend
 
-Este proyecto usa [InsForge](https://insforge.dev) como servicio PostgreSQL administrado para la aplicación.
+Este proyecto usa [InsForge](https://insforge.dev) como backend PostgreSQL administrado.
 
 - **Proyecto:** `app_nexostorage` (API base `https://26kgknrj.us-east.insforge.app`).
-- **Conexión backend:** PostgreSQL por JDBC configurado mediante variables `SPRING_DATASOURCE_*`.
-- **Credenciales:** app en variables de entorno / `.env` local; CLI en `.insforge/project.json`. No hardcodear ni commitear claves.
-- **Skills disponibles:** `insforge` para integración en código con `@insforge/sdk`; `insforge-cli` para infraestructura y CLI; `insforge-debug` para diagnóstico; `insforge-integrations` para proveedores externos y pagos; `find-skills` para descubrir otras capacidades.
-
-El backend Java actual usa JDBC/JPA; aplica las pautas del SDK solo si se incorpora código que realmente use `@insforge/sdk`.
+- **Conexión del backend Java:** JDBC/JPA mediante `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` y `SPRING_DATASOURCE_PASSWORD`; las tablas viven en `auth_schema` y `store_schema`. El código Java no usa `@insforge/sdk`.
+- **Credenciales:** la aplicación lee variables de entorno / `.env`; la CLI lee `.insforge/project.json`. Ambos están ignorados por git: nunca hardcodees ni commitees claves.
+- **Skills instaladas:** `insforge` (código de app con `@insforge/sdk`), `insforge-cli` (infraestructura, SQL y migraciones), `insforge-debug` (diagnóstico), `insforge-integrations` (auth externa y pagos) y `find-skills`.
+- **Flujo:** usa la CLI para inspección, diagnóstico y operaciones de infraestructura. Los cambios de esquema se mantienen en `schema.sql` / `init.sql` (fuente de verdad del repo, `ddl-auto=none`) y el backend Java sigue con JDBC/JPA. Aplica las pautas de `@insforge/sdk` solo si se añade código TypeScript/JavaScript que realmente lo use.
 <!-- INSFORGE:END -->
