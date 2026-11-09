@@ -8,6 +8,7 @@ graphify-out/
 stitch_*/
 
 ### IDE ###
+.opencode
 .idea
 .classpath
 .project
