@@ -18,7 +18,8 @@ services:
     branch: dev
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    autoDeployTrigger: commit # Redeploy automático con cada push a `dev`.
+    # El deploy lo dispara `.github/workflows/deploy.yml` solo si Backend CI pasa.
+    autoDeployTrigger: 'off'
 
     # Sonda de Render: usa el grupo de liveness de Actuator, no el estado global.
     # /health devuelve 503 si la base de datos no responde, y Render reiniciaría

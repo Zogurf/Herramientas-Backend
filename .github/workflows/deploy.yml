@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy to Render
@@ -24,5 +28,9 @@ jobs:
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "Falta el secret RENDER_DEPLOY_HOOK_URL en el repositorio." >&2
+            exit 1
+          fi
           curl --fail --silent --show-error \
             --request POST "$RENDER_DEPLOY_HOOK_URL"
