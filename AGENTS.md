@@ -23,6 +23,7 @@ Herramientas-Backend/
 ├── DEPLOY-RENDER.md                  # Checklist de despliegue en Render
 ├── .env.example                      # Plantilla de variables de entorno (solo placeholders)
 ├── init.sql                          # Inicialización PostgreSQL local y datos iniciales
+├── migrations/                       # Migraciones SQL puntuales (p. ej. registro de paquetes)
 ├── observability/                    # Prometheus + Grafana locales (ver observability/README.md)
 │   ├── prometheus/render-config.sh   # Genera la config del scrape desde .env
 │   ├── grafana/                      # Provisioning (datasource, dashboards, alertas) y dashboard JSON
@@ -41,12 +42,13 @@ Herramientas-Backend/
     │   ├── CategoryController.java   # CRUD de categorías (lectura pública; escritura solo ADMIN)
     │   ├── AdminProductController.java   # Inventario admin: listado paginado, métricas y exportaciones
     │   ├── AdminCategoryController.java  # Gestión admin de categorías
+    │   ├── PackageController.java    # Registro de paquetes del usuario autenticado
     │   └── TrackingController.java   # Historial de tracking público y registro de eventos (ADMIN)
-    ├── dto/                          # Peticiones y respuestas de auth, perfil, recuperación, Google, Facebook y catálogo
+    ├── dto/                          # Peticiones y respuestas de auth, perfil, recuperación, Google, Facebook, catálogo, paquetes y tracking
     ├── exception/                    # Respuestas globales de errores, validación y ResourceNotFoundException
-    ├── model/                        # User, Product (store_schema), Category, PasswordResetToken y enums
-    ├── repository/                   # Repositorios JPA de usuarios, productos, categorías y tokens
-    └── service/                      # AuthService, ProductService, CategoryService, CloudinaryService, EmailService, SlugUtils
+    ├── model/                        # User, Product (store_schema), Category, PasswordResetToken, TrackingEvent y enums
+    ├── repository/                   # Repositorios JPA de usuarios, productos, categorías, tokens y eventos de tracking
+    └── service/                      # AuthService, ProductService, CategoryService, PackageService, TrackingService, CloudinaryService, EmailService, InventoryExportService, SlugUtils
 ```
 
 ## 3. API HTTP
@@ -125,7 +127,15 @@ Campos aceptados al crear/actualizar un producto: `name` (obligatorio), `price` 
 | `GET` | `/api/tracking/{orderId}` | público | Historial de eventos de un pedido (UUID) |
 | `POST` | `/api/tracking` | ADMIN | Registrar un evento de tracking |
 
-`SecurityConfig` permite `/tracking/**` sin token y el `POST` queda protegido por `@PreAuthorize("hasRole('ADMIN')")`. También permite `/packages/**`, pero **no existe un controlador de paquetes** en el código actual; esa regla queda reservada.
+`SecurityConfig` permite `/tracking/**` sin token y el `POST` queda protegido por `@PreAuthorize("hasRole('ADMIN')")`. La regla `permitAll` de `/packages/**` no cubre el controlador real de paquetes (`/v1/packages`), que exige autenticación.
+
+### Paquetes
+
+`PackageController` usa la base `/v1/packages` y exige usuario autenticado: la ruta no está entre las públicas de `SecurityConfig`, así que cae en `anyRequest().authenticated()`. El `POST` toma el usuario de `@AuthenticationPrincipal` y `PackageService` inserta en `package_schema.packages` con `tracking_code` generado por `package_schema.tracking_code_seq` (`NX-…`).
+
+| Método | Ruta | Acceso | Función |
+|---|---|---|---|
+| `POST` | `/api/v1/packages` | autenticado | Registrar un paquete para el usuario autenticado (`201`) |
 
 Los controladores devuelven `ResponseEntity`. El registro responde `201 CREATED`; las consultas y acciones satisfactorias responden `200 OK`. Los errores usan `400` (validación o regla de negocio), `403` (sin permisos o sin token), `404` (recurso inexistente) y `401` (credenciales inválidas).
 
@@ -147,13 +157,14 @@ Las credenciales salen de `MANAGEMENT_USER` / `MANAGEMENT_PASSWORD` (`monitoring
 - `PasswordResetToken` se almacena en `auth_schema.password_reset_tokens`, asociado a un usuario, con vencimiento, marca de uso y dirección IP.
 - `AuthService` gestiona inicio/registro, JWT, actualización del perfil, carga del avatar, recuperación de contraseña y los logins sociales con Google (`loginWithGoogle`, verifica el `id_token`) y con Facebook (`loginWithFacebook`, verifica el access token con `debug_token`). Ambos comparten `loginWithSocialUser`, que crea o vincula la cuenta reutilizando el correo existente. `EmailService` construye el enlace usando `app.frontend.url` y envía el correo por SMTP cuando está configurado.
 - `Product` mapea `store_schema.products` (clave UUID) y `Category` mapea `store_schema.categories`; ambos forman el catálogo real que consume la tienda. `ProductService` sube la imagen a Cloudinary, autogenera `sku`/`slug` si faltan y resuelve el nombre de la categoría para la respuesta. `CategoryService` impide borrar una categoría con productos asociados.
-- `SecurityConfig` permite sin token `POST` de auth y los `GET` del catálogo; el resto exige autenticación. La autorización fina de las escrituras del catálogo público se hace con `@PreAuthorize("hasRole('ADMIN')")` (method security habilitada); las rutas `/admin/**` se autorizan por prefijo en `SecurityConfig` (`hasRole('ADMIN')`), sin anotaciones en cada método. El **CORS tiene una sola fuente**: `CorsConfig`, que expone el bean `CorsConfigurationSource` que consume `SecurityConfig` (`cors(Customizer.withDefaults())`); los orígenes salen de `app.cors.allowed-origins` / `CORS_ALLOWED_ORIGINS` (lista separada por comas, admite patrones como `https://*.onrender.com`) y por defecto permiten `localhost:3000`, `localhost:3001` y `127.0.0.1:3000`. `TrackingController` expone el historial en `GET /tracking/{orderId}` (público) y el registro de eventos en `POST /tracking` (ADMIN); `/packages/**` sigue permitido en la configuración pero no tiene controlador.
+- `PackageService` registra paquetes en `package_schema.packages` con `JdbcTemplate` y genera `tracking_code` desde `package_schema.tracking_code_seq`; no usa una entidad JPA.
+- `SecurityConfig` permite sin token `POST` de auth y los `GET` del catálogo; el resto exige autenticación. La autorización fina de las escrituras del catálogo público se hace con `@PreAuthorize("hasRole('ADMIN')")` (method security habilitada); las rutas `/admin/**` se autorizan por prefijo en `SecurityConfig` (`hasRole('ADMIN')`), sin anotaciones en cada método. El **CORS tiene una sola fuente**: `CorsConfig`, que expone el bean `CorsConfigurationSource` que consume `SecurityConfig` (`cors(Customizer.withDefaults())`); los orígenes salen de `app.cors.allowed-origins` / `CORS_ALLOWED_ORIGINS` (lista separada por comas, admite patrones como `https://*.onrender.com`) y por defecto permiten `localhost:3000`, `localhost:3001` y `127.0.0.1:3000`. `TrackingController` expone el historial en `GET /tracking/{orderId}` (público) y el registro de eventos en `POST /tracking` (ADMIN); `PackageController` expone `POST /v1/packages` para usuarios autenticados, y la regla `permitAll` de `/packages/**` no coincide con esa ruta.
 
 ## 5. Configuración y operación
 
 Las credenciales y valores de entorno deben permanecer fuera del código y de los commits. `application.properties` espera variables como `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `JWT_SECRET`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `GOOGLE_CLIENT_ID`, `FACEBOOK_CLIENT_ID` y `FACEBOOK_CLIENT_SECRET`. La URL de frontend se configura con `FRONTEND_URL` (predeterminada a `http://localhost:3000`), los orígenes permitidos por CORS con `CORS_ALLOWED_ORIGINS` (por defecto, los de desarrollo local) y `FACEBOOK_API_VERSION` fija la versión de la Graph API (por defecto `v26.0`). Docker Compose carga un archivo `.env` local.
 
-**Configuración de Spring repartida en dos archivos (ya sin contradicciones):** `application.properties` define el contexto `/api` y es la **única fuente** de `ddl-auto` (predeterminado `none`, sobrescribible con `SPRING_JPA_HIBERNATE_DDL_AUTO`); `application.yml` define el nombre de la app, el datasource, `hibernate.default_schema: auth_schema`, `format_sql` y JWT, y **ya no declara** `ddl-auto`. No hay dos valores distintos de `ddl-auto`, por lo que se eliminó la ambigüedad previa. El esquema SQL (`schema.sql` / `init.sql`) es la fuente de verdad: incluye `provider` / `provider_id` en `auth_schema.users`, bloques de reconciliación idempotentes para bases existentes (columnas de `users`, RBAC y catálogo `store_schema`) y `schema.sql` puede re-ejecutarse sin error (los tipos `ENUM` se crean de forma idempotente); `init.sql` es un script de arranque único para la base local. Al cambiar configuración, verifica el perfil y las propiedades efectivas.
+**Configuración de Spring repartida en dos archivos (ya sin contradicciones):** `application.properties` define el contexto `/api` y es la **única fuente** de `ddl-auto` (predeterminado `none`, sobrescribible con `SPRING_JPA_HIBERNATE_DDL_AUTO`); `application.yml` define el nombre de la app, el datasource, `hibernate.default_schema: auth_schema`, `format_sql` y JWT, y **ya no declara** `ddl-auto`. No hay dos valores distintos de `ddl-auto`, por lo que se eliminó la ambigüedad previa. El esquema SQL (`schema.sql` / `init.sql`) es la fuente de verdad: incluye `provider` / `provider_id` en `auth_schema.users`, bloques de reconciliación idempotentes para bases existentes (columnas de `users`, RBAC, catálogo `store_schema` y paquetería `package_schema`) y `schema.sql` puede re-ejecutarse sin error (los tipos `ENUM` se crean de forma idempotente); `init.sql` es un script de arranque único para la base local. Al cambiar configuración, verifica el perfil y las propiedades efectivas.
 
 **Archivo de perfil local (no versionado):** `src/main/resources/application-local.properties` replica los valores del `.env` para el perfil `local` y está correctamente ignorado por git (`.gitignore`), sin historial ni copia en el repositorio remoto. **Ojo:** trae `SPRING_JPA_HIBERNATE_DDL_AUTO=update`, de modo que activarlo contra la base administrada haría que Hibernate alterase el esquema de producción. Hoy no hay ninguna referencia a `spring.profiles.active=local` en el código, así que solo se aplica si se activa a mano.
 
