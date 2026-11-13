@@ -74,7 +74,7 @@ Controlador con base `/v1/auth`, por lo que las rutas externas son:
 
 ### Catálogo (productos y categorías)
 
-Las entidades `Product` y `Category` mapean **`store_schema`** (`ddl-auto=none`; el esquema manda). La lectura es pública; toda escritura exige rol `ADMIN` mediante `@PreAuthorize("hasRole('ADMIN')")`.
+Las entidades `Product` y `Category` mapean **`store_schema`** (`ddl-auto=none`; el esquema manda). La lectura es pública; toda escritura exige rol `ADMIN` mediante `@PreAuthorize("hasRole('ADMIN')")`. Los endpoints públicos **solo exponen registros activos**: un producto o categoría con `is_active = false` se comporta como inexistente (`404`) y no aparece en los listados. Los endpoints `/admin/**` sí ven activos e inactivos.
 
 | Método | Ruta | Acceso | Función |
 |---|---|---|---|
@@ -91,7 +91,7 @@ Las entidades `Product` y `Category` mapean **`store_schema`** (`ddl-auto=none`;
 | `PUT` | `/api/categories/{id}` | ADMIN | Actualizar categoría (JSON) |
 | `DELETE` | `/api/categories/{id}` | ADMIN | Eliminar categoría (`400` si hay productos que la usan) |
 
-Campos aceptados al crear/actualizar un producto: `name` (obligatorio), `price` (obligatorio, ≥ 0), `stock`, `categoryId`, `sku` y `slug` (se autogeneran si se omiten y se garantiza su unicidad), `description`, `imageUrl` e `imageHoverUrl`. Si se envía el archivo `file` en la petición, se sube a Cloudinary y tiene prioridad sobre `imageUrl`; si no hay archivo ni `imageUrl`, la creación responde `400` porque la columna es `NOT NULL`.
+Campos aceptados al crear/actualizar un producto: `name` (obligatorio al crear), `price` (obligatorio al crear, ≥ 0 y menor que `100000000.00` para caber en `NUMERIC(10,2)`), `stock` (entero ≥ 0), `categoryId`, `sku` y `slug` (se autogeneran si se omiten y se garantiza su unicidad), `description`, `imageUrl` e `imageHoverUrl`. Si se envía el archivo `file` en la petición, se sube a Cloudinary y tiene prioridad sobre `imageUrl`; si no hay archivo ni `imageUrl`, la creación responde `400` porque la columna es `NOT NULL`. En actualizaciones parciales, omitir `categoryId` conserva la categoría actual y enviar `categoryId: null` la quita; el resto de campos omitidos también se conservan. Los `PUT` no vuelven a generar `sku`/`slug` si no se envían.
 
 ### Administración del catálogo e inventario
 
@@ -116,7 +116,7 @@ Campos aceptados al crear/actualizar un producto: `name` (obligatorio), `price` 
 | `POST` | `/api/admin/categories` | Crear categoría (JSON) |
 | `PUT` | `/api/admin/categories/{id}` | Actualizar categoría (JSON) |
 | `PATCH` | `/api/admin/categories/{id}/deactivate` | Desactivar categoría |
-| `DELETE` | `/api/admin/categories/{id}` | Eliminar categoría (`204`; `400` si tiene productos) |
+| `DELETE` | `/api/admin/categories/{id}` | Eliminar categoría (`204`; `400` si tiene productos o subcategorías) |
 
 ### Tracking
 
@@ -137,7 +137,30 @@ Campos aceptados al crear/actualizar un producto: `name` (obligatorio), `price` 
 |---|---|---|---|
 | `POST` | `/api/v1/packages` | autenticado | Registrar un paquete para el usuario autenticado (`201`) |
 
-Los controladores devuelven `ResponseEntity`. El registro responde `201 CREATED`; las consultas y acciones satisfactorias responden `200 OK`. Los errores usan `400` (validación o regla de negocio), `403` (sin permisos o sin token), `404` (recurso inexistente) y `401` (credenciales inválidas).
+Los controladores devuelven `ResponseEntity`. El registro responde `201 CREATED`; las consultas y acciones satisfactorias responden `200 OK`; los borrados, `204 NO CONTENT`.
+
+### Validación y contrato de errores
+
+Las peticiones se validan con Bean Validation en los DTO (`@Size`, `@Pattern`, `@Min`, `@DecimalMin`, `@Digits`, `@Positive`, etc.) y con reglas de negocio en los servicios. Los mensajes y límites del frontend deben replicar los del backend; los cambios de límites se hacen en ambos lados.
+
+`GlobalExceptionHandler` centraliza las respuestas JSON (`timestamp`, `status`, `error`, `message` y, cuando aplica, `details` por campo):
+
+| Situación | Código | Cuerpo |
+|---|---|---|
+| Campos inválidos (`MethodArgumentNotValidException`) | `400` | `details` asocia cada campo con su mensaje |
+| JSON malformado, cuerpo ausente o tipo incorrecto | `400` | Mensaje genérico; no filtra detalles internos |
+| UUID o parámetro con tipo inválido, parámetro/parte faltante | `400` | Mensaje descriptivo |
+| Regla de negocio (`IllegalArgumentException`) | `400` | Mensaje de la regla |
+| Recurso inexistente (`ResourceNotFoundException`) | `404` | Mensaje con el identificador |
+| Ruta inexistente (`NoResourceFoundException`) | `404` | Mensaje genérico |
+| Credenciales inválidas | `401` | Mensaje de autenticación |
+| Sin token o sin rol suficiente | `403` | Mensaje de acceso denegado |
+| Conflicto de integridad (`DataIntegrityViolationException`) | `409` | Mensaje sin SQL ni nombres de tablas |
+| Archivo mayor a 10 MB | `413` | Mensaje de tamaño |
+| `Content-Type` no soportado | `415` | Mensaje de tipo de contenido |
+| Error no controlado | `500` | Mensaje genérico; el detalle solo va al log |
+
+Los DTO de entrada con campos opcionales que distinguen “omitido” de `null` (por ejemplo `categoryId` / `parentId`) usan un setter anotado con `@JsonSetter` y un flag de presencia. En Spring Boot 4 / Jackson 3, `FAIL_ON_NULL_FOR_PRIMITIVES` está activo: evita `boolean` primitivos en DTO de entrada y mantén el constructor de todos los argumentos de Lombok fuera de la API pública (`@AllArgsConstructor(access = AccessLevel.PRIVATE)`) para que Jackson use el constructor sin argumentos y los setters. `ApplicationTests` cubre esta regresión.
 
 ### Actuator (observabilidad)
 
@@ -196,6 +219,7 @@ Usa el HTML para inspeccionar nodos, archivos de origen y conexiones al modifica
 3. Inyecta configuración mediante propiedades de Spring y variables de entorno; nunca hardcodees ni publiques credenciales.
 4. Conserva la coherencia entre entidades JPA y los esquemas PostgreSQL definidos en `schema.sql` / `init.sql`. El esquema es la fuente de verdad (`ddl-auto=none`): al añadir o renombrar columnas, actualiza ambos scripts **y** el bloque de migración idempotente para bases ya existentes.
 5. Antes de cambiar rutas o reglas de acceso, revisa `server.servlet.context-path` y `SecurityConfig` para considerar el prefijo externo `/api`.
+6. Al añadir DTO de entrada, replica los límites del frontend, documenta el campo en este archivo y añade una prueba de validación o deserialización cuando la regla no sea obvia.
 
 <!-- INSFORGE:START -->
 ## InsForge backend

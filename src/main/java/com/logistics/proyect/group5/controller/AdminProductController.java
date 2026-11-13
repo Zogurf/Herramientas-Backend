@@ -4,7 +4,6 @@ import com.logistics.proyect.group5.dto.ProductRequest;
 import com.logistics.proyect.group5.dto.ProductResponse;
 import com.logistics.proyect.group5.dto.InventoryStatsResponse;
 import com.logistics.proyect.group5.model.Product;
-import com.logistics.proyect.group5.service.CategoryService;
 import com.logistics.proyect.group5.service.CloudinaryService;
 import com.logistics.proyect.group5.service.InventoryExportService;
 import com.logistics.proyect.group5.service.ProductService;
@@ -29,7 +28,6 @@ import java.util.UUID;
 public class AdminProductController {
 
     private final ProductService productService;
-    private final CategoryService categoryService;
     private final CloudinaryService cloudinaryService;
     private final InventoryExportService inventoryExportService;
 
@@ -118,14 +116,14 @@ public class AdminProductController {
     @PostMapping
     public ResponseEntity<ProductResponse> create(@Valid @RequestBody ProductRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(toResponse(productService.create(toEntity(request))));
+                .body(productService.create(request, null));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<ProductResponse> update(
             @PathVariable UUID id,
             @Valid @RequestBody ProductRequest request) {
-        return ResponseEntity.ok(toResponse(productService.update(id, toEntity(request))));
+        return ResponseEntity.ok(productService.update(id, request, null));
     }
 
     @PatchMapping("/{id}/deactivate")
@@ -169,28 +167,6 @@ public class AdminProductController {
         Product current = productService.findById(id);
         cloudinaryService.deleteImage(current.getImageHoverUrl());
         return ResponseEntity.ok(toResponse(productService.removeHoverImage(id)));
-    }
-
-    private Product toEntity(ProductRequest request) {
-        return Product.builder()
-                .sku(request.getSku())
-                .name(request.getName())
-                .slug(request.getSlug())
-                .description(request.getDescription())
-                .price(request.getPrice())
-                .stock(request.getStock())
-                .category(request.getCategoryId() == null
-                        ? null
-                        : com.logistics.proyect.group5.model.Category.builder()
-                        .id(request.getCategoryId())
-                        .build())
-                .imageUrl(request.getImageUrl())
-                .imageHoverUrl(request.getImageHoverUrl())
-                .rating(request.getRating())
-                .reviewsCount(request.getReviewsCount())
-                .newProduct(request.getNewProduct() == null || request.getNewProduct())
-                .active(request.getActive() == null || request.getActive())
-                .build();
     }
 
     private ResponseEntity<byte[]> download(byte[] content, String filename, String contentType) {

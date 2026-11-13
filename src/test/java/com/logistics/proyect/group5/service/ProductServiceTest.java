@@ -1,6 +1,7 @@
 package com.logistics.proyect.group5.service;
 
 import com.logistics.proyect.group5.model.Product;
+import com.logistics.proyect.group5.exception.ResourceNotFoundException;
 import com.logistics.proyect.group5.repository.ProductRepository;
 import com.logistics.proyect.group5.repository.InventoryStatsProjection;
 import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
@@ -146,5 +147,60 @@ class ProductServiceTest {
         assertEquals("LOW", productService.stockStatus(1));
         assertEquals("LOW", productService.stockStatus(10));
         assertEquals("OPTIMAL", productService.stockStatus(11));
+    }
+
+    @Test
+    void createRejectsPriceAboveColumnPrecision() {
+        Product product = Product.builder()
+                .sku("KB-002")
+                .name("Teclado caro")
+                .price(new BigDecimal("100000000.00"))
+                .stock(1)
+                .imageUrl("https://example.com/image.png")
+                .build();
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> productService.create(product)
+        );
+
+        assertTrue(exception.getMessage().contains("100000000"));
+        verifyNoInteractions(productRepository);
+    }
+
+    @Test
+    void publicLookupHidesInactiveProducts() {
+        UUID id = UUID.randomUUID();
+        Product inactive = Product.builder()
+                .id(id)
+                .sku("KB-003")
+                .name("Teclado retirado")
+                .slug("teclado-retirado")
+                .price(BigDecimal.TEN)
+                .stock(1)
+                .imageUrl("https://example.com/image.png")
+                .active(false)
+                .build();
+        when(productRepository.findById(id)).thenReturn(Optional.of(inactive));
+
+        assertThrows(ResourceNotFoundException.class, () -> productService.get(id));
+    }
+
+    @Test
+    void publicLookupReturnsActiveProducts() {
+        UUID id = UUID.randomUUID();
+        Product active = Product.builder()
+                .id(id)
+                .sku("KB-004")
+                .name("Teclado vigente")
+                .slug("teclado-vigente")
+                .price(BigDecimal.TEN)
+                .stock(1)
+                .imageUrl("https://example.com/image.png")
+                .active(true)
+                .build();
+        when(productRepository.findById(id)).thenReturn(Optional.of(active));
+
+        assertEquals("Teclado vigente", productService.get(id).getName());
     }
 }

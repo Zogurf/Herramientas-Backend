@@ -79,7 +79,7 @@ public class AuthController {
     @PutMapping("/profile")
     public ResponseEntity<UserSummaryDto> updateProfile(
             @AuthenticationPrincipal User currentUser,
-            @RequestBody UpdateProfileRequest request) {
+            @Valid @RequestBody UpdateProfileRequest request) {
         if (currentUser == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
