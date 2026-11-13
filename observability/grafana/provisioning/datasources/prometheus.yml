@@ -1,0 +1,16 @@
+# Datasource provisionado automáticamente: al abrir Grafana ya hay datos, sin
+# tener que añadir la fuente a mano. El uid es fijo porque los dashboards JSON
+# lo referencian.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s
+      httpMethod: POST

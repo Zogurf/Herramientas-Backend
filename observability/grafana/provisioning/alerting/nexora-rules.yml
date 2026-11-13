@@ -1,0 +1,168 @@
+# Alertas provisionadas en Grafana (no en Prometheus: sin Alertmanager).
+#
+# Las notificaciones usan el contact point por defecto de Grafana, que en una
+# instalación limpia no envía correo a ningún sitio. Para recibir avisos hay que
+# configurar uno en Alerting → Contact points.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: nexora-backend
+    folder: NEXORA
+    folderUid: nexora
+    interval: 1m
+    rules:
+      # ---------------------------------------------------------------------
+      # 1) Tasa de errores 5xx > 5 % durante 5 minutos
+      # ---------------------------------------------------------------------
+      - uid: nexora-http-5xx
+        title: Errores 5xx por encima del 5 %
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: >-
+                sum(rate(http_server_requests_seconds_count{application="nexora-backend", status=~"5.."}[5m]))
+                / clamp_min(sum(rate(http_server_requests_seconds_count{application="nexora-backend"}[5m])), 0.0001)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { params: [0.05], type: gt }
+                  operator: { type: and }
+                  query: { params: [B] }
+                  reducer: { params: [], type: last }
+                  type: query
+              expression: C
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        isPaused: false
+        annotations:
+          summary: "Más del 5 % de las peticiones devuelven 5xx"
+          description: "La tasa de errores 5xx lleva 5 minutos por encima del 5 %."
+        labels:
+          severity: warning
+          service: nexora-backend
+
+      # ---------------------------------------------------------------------
+      # 2) p95 de latencia > 2 s durante 10 minutos
+      # ---------------------------------------------------------------------
+      - uid: nexora-http-p95
+        title: Latencia p95 por encima de 2 s
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: >-
+                histogram_quantile(0.95,
+                sum by (le) (rate(http_server_requests_seconds_bucket{application="nexora-backend"}[10m])))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { params: [2], type: gt }
+                  operator: { type: and }
+                  query: { params: [B] }
+                  reducer: { params: [], type: last }
+                  type: query
+              expression: C
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 10m
+        isPaused: false
+        annotations:
+          summary: "El p95 de latencia supera 2 s"
+          description: "El percentil 95 de las peticiones HTTP lleva 10 minutos por encima de 2 segundos."
+        labels:
+          severity: warning
+          service: nexora-backend
+
+      # ---------------------------------------------------------------------
+      # 3) Conexiones esperando en el pool de HikariCP
+      #    Si se mantiene > 0 hay saturación o una fuga contra InsForge.
+      # ---------------------------------------------------------------------
+      - uid: nexora-hikari-pending
+        title: Conexiones pendientes en el pool
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: max(hikaricp_connections_pending{application="nexora-backend"})
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { params: [0], type: gt }
+                  operator: { type: and }
+                  query: { params: [B] }
+                  reducer: { params: [], type: last }
+                  type: query
+              expression: C
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        isPaused: false
+        annotations:
+          summary: "Hay peticiones esperando una conexión a base de datos"
+          description: "hikaricp_connections_pending lleva 5 minutos por encima de 0: el pool está saturado o hay una fuga."
+        labels:
+          severity: critical
+          service: nexora-backend

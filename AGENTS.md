@@ -23,6 +23,11 @@ Herramientas-Backend/
 ├── DEPLOY-RENDER.md                  # Checklist de despliegue en Render
 ├── .env.example                      # Plantilla de variables de entorno (solo placeholders)
 ├── init.sql                          # Inicialización PostgreSQL local y datos iniciales
+├── migrations/                       # Migraciones SQL puntuales (p. ej. registro de paquetes)
+├── observability/                    # Prometheus + Grafana locales (ver observability/README.md)
+│   ├── prometheus/render-config.sh   # Genera la config del scrape desde .env
+│   ├── grafana/                      # Provisioning (datasource, dashboards, alertas) y dashboard JSON
+│   └── scripts/allow-docker-to-backend.sh  # Regla de UFW para el scrape en Linux
 ├── src/main/resources/
 │   ├── application.properties        # Puerto, contexto /api, única fuente de ddl-auto y variables de entorno
 │   ├── application.yml               # Nombre de app, datasource JPA, default_schema y JWT (sin ddl-auto ni contexto)
@@ -34,12 +39,16 @@ Herramientas-Backend/
     ├── controller/
     │   ├── AuthController.java       # Sesión, cuenta, perfil, recuperación de contraseña y login con Google/Facebook
     │   ├── ProductController.java    # CRUD del catálogo (lectura pública; escritura solo ADMIN)
-    │   └── CategoryController.java   # CRUD de categorías (lectura pública; escritura solo ADMIN)
-    ├── dto/                          # Peticiones y respuestas de auth, perfil, recuperación, Google, Facebook y catálogo
+    │   ├── CategoryController.java   # CRUD de categorías (lectura pública; escritura solo ADMIN)
+    │   ├── AdminProductController.java   # Inventario admin: listado paginado, métricas y exportaciones
+    │   ├── AdminCategoryController.java  # Gestión admin de categorías
+    │   ├── PackageController.java    # Registro de paquetes del usuario autenticado
+    │   └── TrackingController.java   # Historial de tracking público y registro de eventos (ADMIN)
+    ├── dto/                          # Peticiones y respuestas de auth, perfil, recuperación, Google, Facebook, catálogo, paquetes y tracking
     ├── exception/                    # Respuestas globales de errores, validación y ResourceNotFoundException
-    ├── model/                        # User, Product (store_schema), Category, PasswordResetToken y enums
-    ├── repository/                   # Repositorios JPA de usuarios, productos, categorías y tokens
-    └── service/                      # AuthService, ProductService, CategoryService, CloudinaryService, EmailService, SlugUtils
+    ├── model/                        # User, Product (store_schema), Category, PasswordResetToken, TrackingEvent y enums
+    ├── repository/                   # Repositorios JPA de usuarios, productos, categorías, tokens y eventos de tracking
+    └── service/                      # AuthService, ProductService, CategoryService, PackageService, TrackingService, CloudinaryService, EmailService, InventoryExportService, SlugUtils
 ```
 
 ## 3. API HTTP
@@ -84,7 +93,63 @@ Las entidades `Product` y `Category` mapean **`store_schema`** (`ddl-auto=none`;
 
 Campos aceptados al crear/actualizar un producto: `name` (obligatorio), `price` (obligatorio, ≥ 0), `stock`, `categoryId`, `sku` y `slug` (se autogeneran si se omiten y se garantiza su unicidad), `description`, `imageUrl` e `imageHoverUrl`. Si se envía el archivo `file` en la petición, se sube a Cloudinary y tiene prioridad sobre `imageUrl`; si no hay archivo ni `imageUrl`, la creación responde `400` porque la columna es `NOT NULL`.
 
+### Administración del catálogo e inventario
+
+`AdminProductController` y `AdminCategoryController` atienden bajo `/admin/**`. `SecurityConfig` exige rol `ADMIN` para todo ese prefijo, así que estos controladores no repiten `@PreAuthorize`. A diferencia del catálogo público, sus altas y ediciones usan **JSON** (`ProductRequest` / `CategoryRequest`); las imágenes se suben en un endpoint aparte como `multipart/form-data`.
+
+| Método | Ruta | Función |
+|---|---|---|
+| `GET` | `/api/admin/products` | Listado simple con filtros `search`, `categoryId`, `activeOnly` |
+| `GET` | `/api/admin/products/inventory` | Inventario paginado (`page`, `size` ≤ 100, `sortBy`, `direction`, `active`, `stockStatus`) |
+| `GET` | `/api/admin/products/inventory/stats` | Contadores del inventario con los mismos filtros |
+| `GET` | `/api/admin/products/inventory/export.xlsx` | Exportar el inventario filtrado a Excel |
+| `GET` | `/api/admin/products/inventory/export.pdf` | Exportar el inventario filtrado a PDF |
+| `GET` | `/api/admin/products/{id}` | Consultar un producto (UUID) |
+| `POST` | `/api/admin/products` | Crear producto (JSON) |
+| `PUT` | `/api/admin/products/{id}` | Actualizar producto (JSON) |
+| `PATCH` | `/api/admin/products/{id}/deactivate` | Desactivar producto |
+| `DELETE` | `/api/admin/products/{id}` | Eliminar producto y sus imágenes (`204`) |
+| `POST` | `/api/admin/products/{id}/images` | Reemplazar imágenes (`multipart`: `image` obligatorio, `hoverImage` opcional) |
+| `DELETE` | `/api/admin/products/{id}/images/hover` | Quitar la imagen hover |
+| `GET` | `/api/admin/categories` | Listar categorías con `search` y `activeOnly` |
+| `GET` | `/api/admin/categories/{id}` | Consultar una categoría |
+| `POST` | `/api/admin/categories` | Crear categoría (JSON) |
+| `PUT` | `/api/admin/categories/{id}` | Actualizar categoría (JSON) |
+| `PATCH` | `/api/admin/categories/{id}/deactivate` | Desactivar categoría |
+| `DELETE` | `/api/admin/categories/{id}` | Eliminar categoría (`204`; `400` si tiene productos) |
+
+### Tracking
+
+`TrackingController` usa la base `/tracking`:
+
+| Método | Ruta | Acceso | Función |
+|---|---|---|---|
+| `GET` | `/api/tracking/{orderId}` | público | Historial de eventos de un pedido (UUID) |
+| `POST` | `/api/tracking` | ADMIN | Registrar un evento de tracking |
+
+`SecurityConfig` permite `/tracking/**` sin token y el `POST` queda protegido por `@PreAuthorize("hasRole('ADMIN')")`. La regla `permitAll` de `/packages/**` no cubre el controlador real de paquetes (`/v1/packages`), que exige autenticación.
+
+### Paquetes
+
+`PackageController` usa la base `/v1/packages` y exige usuario autenticado: la ruta no está entre las públicas de `SecurityConfig`, así que cae en `anyRequest().authenticated()`. El `POST` toma el usuario de `@AuthenticationPrincipal` y `PackageService` inserta en `package_schema.packages` con `tracking_code` generado por `package_schema.tracking_code_seq` (`NX-…`).
+
+| Método | Ruta | Acceso | Función |
+|---|---|---|---|
+| `POST` | `/api/v1/packages` | autenticado | Registrar un paquete para el usuario autenticado (`201`) |
+
 Los controladores devuelven `ResponseEntity`. El registro responde `201 CREATED`; las consultas y acciones satisfactorias responden `200 OK`. Los errores usan `400` (validación o regla de negocio), `403` (sin permisos o sin token), `404` (recurso inexistente) y `401` (credenciales inválidas).
+
+### Actuator (observabilidad)
+
+`spring-boot-starter-actuator` está activo y se expone bajo el contexto habitual, es decir `/api/actuator/*`. `SecurityConfig` le dedica una cadena propia (`@Order(1)`, `securityMatcher("/actuator/**")`) sin el filtro JWT:
+
+| Método | Ruta | Acceso | Función |
+|---|---|---|---|
+| `GET` | `/api/actuator/health` y `/health/**` | público | Sonda de Render (`health/liveness`) y estado global |
+| `GET` | `/api/actuator/info` | público | Información de la aplicación |
+| `GET` | `/api/actuator/prometheus` | Basic auth, rol `MONITOR` | Métricas para el scrape local |
+
+Las credenciales salen de `MANAGEMENT_USER` / `MANAGEMENT_PASSWORD` (`monitoring.user` / `monitoring.password`). Si falta cualquiera, esa cadena falla cerrada con `401` y no recurre a credenciales por defecto. El proveedor se registra solo en el `AuthenticationManager` de la cadena de Actuator, así que no interfiere con el login de usuarios de la base.
 
 ## 4. Dominio y flujo de autenticación
 
@@ -92,19 +157,22 @@ Los controladores devuelven `ResponseEntity`. El registro responde `201 CREATED`
 - `PasswordResetToken` se almacena en `auth_schema.password_reset_tokens`, asociado a un usuario, con vencimiento, marca de uso y dirección IP.
 - `AuthService` gestiona inicio/registro, JWT, actualización del perfil, carga del avatar, recuperación de contraseña y los logins sociales con Google (`loginWithGoogle`, verifica el `id_token`) y con Facebook (`loginWithFacebook`, verifica el access token con `debug_token`). Ambos comparten `loginWithSocialUser`, que crea o vincula la cuenta reutilizando el correo existente. `EmailService` construye el enlace usando `app.frontend.url` y envía el correo por SMTP cuando está configurado.
 - `Product` mapea `store_schema.products` (clave UUID) y `Category` mapea `store_schema.categories`; ambos forman el catálogo real que consume la tienda. `ProductService` sube la imagen a Cloudinary, autogenera `sku`/`slug` si faltan y resuelve el nombre de la categoría para la respuesta. `CategoryService` impide borrar una categoría con productos asociados.
-- `SecurityConfig` permite sin token `POST` de auth y los `GET` del catálogo; el resto exige autenticación. La autorización fina de escrituras se hace con `@PreAuthorize("hasRole('ADMIN')")` (method security habilitada). El **CORS tiene una sola fuente**: `CorsConfig`, que expone el bean `CorsConfigurationSource` que consume `SecurityConfig` (`cors(Customizer.withDefaults())`); los orígenes salen de `app.cors.allowed-origins` / `CORS_ALLOWED_ORIGINS` (lista separada por comas, admite patrones como `https://*.onrender.com`) y por defecto permiten `localhost:3000`, `localhost:3001` y `127.0.0.1:3000`. La autorización de paquetes/tracking está preparada en la configuración, pero no se encontraron controladores de esos recursos en el código actual.
+- `PackageService` registra paquetes en `package_schema.packages` con `JdbcTemplate` y genera `tracking_code` desde `package_schema.tracking_code_seq`; no usa una entidad JPA.
+- `SecurityConfig` permite sin token `POST` de auth y los `GET` del catálogo; el resto exige autenticación. La autorización fina de las escrituras del catálogo público se hace con `@PreAuthorize("hasRole('ADMIN')")` (method security habilitada); las rutas `/admin/**` se autorizan por prefijo en `SecurityConfig` (`hasRole('ADMIN')`), sin anotaciones en cada método. El **CORS tiene una sola fuente**: `CorsConfig`, que expone el bean `CorsConfigurationSource` que consume `SecurityConfig` (`cors(Customizer.withDefaults())`); los orígenes salen de `app.cors.allowed-origins` / `CORS_ALLOWED_ORIGINS` (lista separada por comas, admite patrones como `https://*.onrender.com`) y por defecto permiten `localhost:3000`, `localhost:3001` y `127.0.0.1:3000`. `TrackingController` expone el historial en `GET /tracking/{orderId}` (público) y el registro de eventos en `POST /tracking` (ADMIN); `PackageController` expone `POST /v1/packages` para usuarios autenticados, y la regla `permitAll` de `/packages/**` no coincide con esa ruta.
 
 ## 5. Configuración y operación
 
 Las credenciales y valores de entorno deben permanecer fuera del código y de los commits. `application.properties` espera variables como `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `JWT_SECRET`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `GOOGLE_CLIENT_ID`, `FACEBOOK_CLIENT_ID` y `FACEBOOK_CLIENT_SECRET`. La URL de frontend se configura con `FRONTEND_URL` (predeterminada a `http://localhost:3000`), los orígenes permitidos por CORS con `CORS_ALLOWED_ORIGINS` (por defecto, los de desarrollo local) y `FACEBOOK_API_VERSION` fija la versión de la Graph API (por defecto `v26.0`). Docker Compose carga un archivo `.env` local.
 
-**Configuración de Spring repartida en dos archivos (ya sin contradicciones):** `application.properties` define el contexto `/api` y es la **única fuente** de `ddl-auto` (predeterminado `none`, sobrescribible con `SPRING_JPA_HIBERNATE_DDL_AUTO`); `application.yml` define el nombre de la app, el datasource, `hibernate.default_schema: auth_schema`, `format_sql` y JWT, y **ya no declara** `ddl-auto`. No hay dos valores distintos de `ddl-auto`, por lo que se eliminó la ambigüedad previa. El esquema SQL (`schema.sql` / `init.sql`) es la fuente de verdad: incluye `provider` / `provider_id` en `auth_schema.users`, bloques de reconciliación idempotentes para bases existentes (columnas de `users`, RBAC y catálogo `store_schema`) y `schema.sql` puede re-ejecutarse sin error (los tipos `ENUM` se crean de forma idempotente); `init.sql` es un script de arranque único para la base local. Al cambiar configuración, verifica el perfil y las propiedades efectivas.
+**Configuración de Spring repartida en dos archivos (ya sin contradicciones):** `application.properties` define el contexto `/api` y es la **única fuente** de `ddl-auto` (predeterminado `none`, sobrescribible con `SPRING_JPA_HIBERNATE_DDL_AUTO`); `application.yml` define el nombre de la app, el datasource, `hibernate.default_schema: auth_schema`, `format_sql` y JWT, y **ya no declara** `ddl-auto`. No hay dos valores distintos de `ddl-auto`, por lo que se eliminó la ambigüedad previa. El esquema SQL (`schema.sql` / `init.sql`) es la fuente de verdad: incluye `provider` / `provider_id` en `auth_schema.users`, bloques de reconciliación idempotentes para bases existentes (columnas de `users`, RBAC, catálogo `store_schema` y paquetería `package_schema`) y `schema.sql` puede re-ejecutarse sin error (los tipos `ENUM` se crean de forma idempotente); `init.sql` es un script de arranque único para la base local. Al cambiar configuración, verifica el perfil y las propiedades efectivas.
 
 **Archivo de perfil local (no versionado):** `src/main/resources/application-local.properties` replica los valores del `.env` para el perfil `local` y está correctamente ignorado por git (`.gitignore`), sin historial ni copia en el repositorio remoto. **Ojo:** trae `SPRING_JPA_HIBERNATE_DDL_AUTO=update`, de modo que activarlo contra la base administrada haría que Hibernate alterase el esquema de producción. Hoy no hay ninguna referencia a `spring.profiles.active=local` en el código, así que solo se aplica si se activa a mano.
 
 **Ojo con `store_schema` en la base administrada:** sus tablas se crearon en algún momento desde entidades Hibernate, por lo que `categories.id` no tenía identidad y faltaban los `DEFAULT` declarados en `schema.sql`. El bloque de reconciliación del catálogo (en ambos scripts) los restaura de forma idempotente; si añades columnas nuevas al catálogo, aplícalas también ahí.
 
 El proyecto utiliza InsForge como PostgreSQL administrado cuando `SPRING_DATASOURCE_URL` apunta a ese servicio. La CLI de InsForge se configura por separado en `.insforge/project.json`; nunca copies credenciales de aplicación o CLI a esta guía.
+
+**Observabilidad:** conviven dos registries de Micrometer. `micrometer-registry-prometheus` sirve el scrape local en `/api/actuator/prometheus`; `micrometer-registry-otlp` empuja a Grafana Cloud y está **apagado por defecto** (`management.otlp.metrics.export.enabled=${OTLP_ENABLED:false}`). En local, `docker compose up -d prometheus grafana` levanta Prometheus (`:9090`) y Grafana (`:3001`, porque el 3000 es del frontend) con datasource, dashboard y alertas aprovisionados; el detalle está en `observability/README.md`. Prometheus no expande variables en su YAML, por eso `observability/prometheus/render-config.sh` genera la configuración con `PROM_USER`, `PROM_PASS` y `PROM_TARGET` (este último permite alternar entre `host.docker.internal:8080` y `backend:8080`). En Linux con UFW los contenedores no alcanzan los puertos del host: hay que aplicar una vez `sudo observability/scripts/allow-docker-to-backend.sh`. En Render no se autohospeda nada (plan Free sin discos persistentes y con spin-down): el blueprint activa el push OTLP y usa `/api/actuator/health/liveness` como sonda para no reiniciar el servicio cuando falla la base de datos.
 
 ## 6. Mapa de dependencias (Graphify)
 
@@ -128,14 +196,13 @@ Usa el HTML para inspeccionar nodos, archivos de origen y conexiones al modifica
 5. Antes de cambiar rutas o reglas de acceso, revisa `server.servlet.context-path` y `SecurityConfig` para considerar el prefijo externo `/api`.
 
 <!-- INSFORGE:START -->
-## InsForge
+## InsForge backend
 
-Este proyecto usa [InsForge](https://insforge.dev) como servicio PostgreSQL administrado para la aplicación.
+Este proyecto usa [InsForge](https://insforge.dev) como backend PostgreSQL administrado.
 
 - **Proyecto:** `app_nexostorage` (API base `https://26kgknrj.us-east.insforge.app`).
-- **Conexión backend:** PostgreSQL por JDBC configurado mediante variables `SPRING_DATASOURCE_*`.
-- **Credenciales:** app en variables de entorno / `.env` local; CLI en `.insforge/project.json`. No hardcodear ni commitear claves.
-- **Skills disponibles:** `insforge` para integración en código con `@insforge/sdk`; `insforge-cli` para infraestructura y CLI; `insforge-debug` para diagnóstico; `insforge-integrations` para proveedores externos y pagos; `find-skills` para descubrir otras capacidades.
-
-El backend Java actual usa JDBC/JPA; aplica las pautas del SDK solo si se incorpora código que realmente use `@insforge/sdk`.
+- **Conexión del backend Java:** JDBC/JPA mediante `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` y `SPRING_DATASOURCE_PASSWORD`; las tablas viven en `auth_schema` y `store_schema`. El código Java no usa `@insforge/sdk`.
+- **Credenciales:** la aplicación lee variables de entorno / `.env`; la CLI lee `.insforge/project.json`. Ambos están ignorados por git: nunca hardcodees ni commitees claves.
+- **Skills instaladas:** `insforge` (código de app con `@insforge/sdk`), `insforge-cli` (infraestructura, SQL y migraciones), `insforge-debug` (diagnóstico), `insforge-integrations` (auth externa y pagos) y `find-skills`.
+- **Flujo:** usa la CLI para inspección, diagnóstico y operaciones de infraestructura. Los cambios de esquema se mantienen en `schema.sql` / `init.sql` (fuente de verdad del repo, `ddl-auto=none`) y el backend Java sigue con JDBC/JPA. Aplica las pautas de `@insforge/sdk` solo si se añade código TypeScript/JavaScript que realmente lo use.
 <!-- INSFORGE:END -->
