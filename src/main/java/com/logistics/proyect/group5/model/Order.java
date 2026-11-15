@@ -2,26 +2,55 @@ package com.logistics.proyect.group5.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "orders", schema = "store_schema")
+@Table(name = "orders", schema = "public")
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class Order {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    // Aquí irían los demás campos de tu pedido (total, usuario, dirección, etc.)
+@Column(name = "order_number", nullable = false, unique = true, length = 20)
+private String orderNumber;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal total;
+
+    @Column(nullable = false, length = 30)
+    private String status;
+
+    @Column(name = "payment_method", nullable = false, length = 30)
+    private String paymentMethod;
+
+    @Column(name = "payment_status", nullable = false, length = 30)
+    private String paymentStatus;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @OneToMany(
+            mappedBy = "order",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    @Builder.Default
+    private List<OrderItem> items = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {
