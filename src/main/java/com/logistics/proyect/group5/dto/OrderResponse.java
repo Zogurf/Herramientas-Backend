@@ -14,13 +14,28 @@ import java.util.UUID;
 public class OrderResponse {
 
     private UUID id;
-private String orderNumber;
+    private String orderNumber;
     private BigDecimal total;
     private String status;
     private String paymentMethod;
     private String paymentStatus;
     private LocalDateTime createdAt;
     private List<OrderItemResponse> items;
+    private CustomerResponse customer;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CustomerResponse {
+
+        private String fullName;
+        private String email;
+        private String phone;
+        private String address;
+        private String city;
+        private String notes;
+    }
 
     @Data
     @Builder

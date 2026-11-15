@@ -1,0 +1,7 @@
+ALTER TABLE public.orders
+    ADD COLUMN IF NOT EXISTS customer_full_name VARCHAR(150),
+    ADD COLUMN IF NOT EXISTS customer_email VARCHAR(150),
+    ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS shipping_address VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS shipping_city VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS notes TEXT;

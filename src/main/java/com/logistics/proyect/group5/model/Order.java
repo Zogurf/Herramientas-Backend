@@ -22,8 +22,8 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-@Column(name = "order_number", nullable = false, unique = true, length = 20)
-private String orderNumber;
+    @Column(name = "order_number", nullable = false, unique = true, length = 20)
+    private String orderNumber;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
@@ -37,6 +37,24 @@ private String orderNumber;
 
     @Column(name = "payment_method", nullable = false, length = 30)
     private String paymentMethod;
+
+    @Column(name = "customer_full_name", length = 150)
+    private String customerFullName;
+
+    @Column(name = "customer_email", length = 150)
+    private String customerEmail;
+
+    @Column(name = "customer_phone", length = 20)
+    private String customerPhone;
+
+    @Column(name = "shipping_address", length = 255)
+    private String shippingAddress;
+
+    @Column(name = "shipping_city", length = 100)
+    private String shippingCity;
+
+    @Column(name = "notes", columnDefinition = "TEXT")
+    private String notes;
 
     @Column(name = "payment_status", nullable = false, length = 30)
     private String paymentStatus;

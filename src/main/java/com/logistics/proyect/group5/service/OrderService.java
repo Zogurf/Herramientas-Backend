@@ -57,6 +57,12 @@ public class OrderService {
                 .total(BigDecimal.ZERO)
                 .status("PENDING")
                 .paymentMethod(paymentMethod)
+                .customerFullName(request.getCustomer().getFullName())
+                .customerEmail(request.getCustomer().getEmail())
+                .customerPhone(request.getCustomer().getPhone())
+                .shippingAddress(request.getCustomer().getAddress())
+                .shippingCity(request.getCustomer().getCity())
+                .notes(request.getCustomer().getNotes())
                 .paymentStatus("PENDING")
                 .items(new ArrayList<>())
                 .build();
@@ -168,6 +174,18 @@ public class OrderService {
     }
 
     private OrderResponse toResponse(Order order) {
+        OrderResponse.CustomerResponse customer = null;
+
+        if (order.getCustomerFullName() != null) {
+            customer = OrderResponse.CustomerResponse.builder()
+                    .fullName(order.getCustomerFullName())
+                    .email(order.getCustomerEmail())
+                    .phone(order.getCustomerPhone())
+                    .address(order.getShippingAddress())
+                    .city(order.getShippingCity())
+                    .notes(order.getNotes())
+                    .build();
+        }
 
         List<OrderResponse.OrderItemResponse> items = order.getItems()
                 .stream()
@@ -189,6 +207,7 @@ public class OrderService {
                 .paymentStatus(order.getPaymentStatus())
                 .createdAt(order.getCreatedAt())
                 .items(items)
+                .customer(customer)
                 .build();
     }
 }
