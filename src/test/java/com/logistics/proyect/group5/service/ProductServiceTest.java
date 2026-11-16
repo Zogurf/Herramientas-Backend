@@ -56,6 +56,16 @@ class ProductServiceTest {
     }
 
     @Test
+    void getBySlugHidesInactiveProduct() {
+        Product product = Product.builder().id(UUID.randomUUID())
+                .name("Producto oculto").slug("producto-oculto").stock(1).active(false).build();
+        when(productRepository.findBySlug("producto-oculto")).thenReturn(Optional.of(product));
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> productService.getBySlug("producto-oculto"));
+    }
+
+    @Test
     void createAddsSuffixWhenGeneratedSlugAlreadyExists() {
         Product product = Product.builder().sku("MCH-68").name("Mchose Ace 68")
                 .price(BigDecimal.TEN).stock(1).imageUrl("https://example.com/image.png").build();
