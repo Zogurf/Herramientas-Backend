@@ -81,6 +81,7 @@ Las entidades `Product` y `Category` mapean **`store_schema`** (`ddl-auto=none`;
 | `GET` | `/api/products` | público | Listar productos activos |
 | `GET` | `/api/products/manage` | ADMIN | Listar todos (incluye inactivos) |
 | `GET` | `/api/products/{id}` | público | Consultar un producto (UUID) |
+| `GET` | `/api/products/slug/{slug}` | público | Consultar un producto por slug |
 | `POST` | `/api/products` | ADMIN | Crear producto (`multipart/form-data`) |
 | `POST` | `/api/products/upload` | ADMIN | Alias histórico de `POST /api/products` |
 | `PUT` | `/api/products/{id}` | ADMIN | Actualizar producto (`multipart/form-data`) |
@@ -117,6 +118,8 @@ Campos aceptados al crear/actualizar un producto: `name` (obligatorio al crear),
 | `PUT` | `/api/admin/categories/{id}` | Actualizar categoría (JSON) |
 | `PATCH` | `/api/admin/categories/{id}/deactivate` | Desactivar categoría |
 | `DELETE` | `/api/admin/categories/{id}` | Eliminar categoría (`204`; `400` si tiene productos o subcategorías) |
+
+El formulario de inventario no envía slug: las altas generan uno único a partir del nombre (con sufijos si se repite) y las ediciones conservan el slug existente para mantener estables los enlaces públicos. La tienda enlaza mediante `/producto/{slug}` y sustituye las direcciones antiguas por UUID al cargar el producto.
 
 ### Tracking
 

@@ -48,6 +48,11 @@ public class ProductController {
         return ResponseEntity.ok(productService.get(id));
     }
 
+    @GetMapping("/slug/{slug}")
+    public ResponseEntity<ProductResponse> getBySlug(@PathVariable String slug) {
+        return ResponseEntity.ok(productService.getBySlug(slug));
+    }
+
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ProductResponse> create(@Valid @ModelAttribute ProductRequest request,

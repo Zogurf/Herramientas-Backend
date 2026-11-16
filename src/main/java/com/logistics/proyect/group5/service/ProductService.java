@@ -52,6 +52,13 @@ public class ProductService {
         return toResponse(product, null);
     }
 
+    public ProductResponse getBySlug(String slug) {
+        // Endpoint público: un producto inactivo se comporta como inexistente.
+        return toResponse(productRepository.findBySlug(slug)
+                .filter(Product::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + slug)), null);
+    }
+
     @Transactional
     public ProductResponse create(ProductRequest request, MultipartFile file) {
         String name = normalizeText(request.getName());
@@ -245,8 +252,8 @@ public class ProductService {
         validateProduct(product, true);
 
         String normalizedSku = normalizeSku(product.getSku());
-        String normalizedSlug = resolveSlug(product.getName(), product.getSlug());
         ensureSkuAvailable(normalizedSku, null);
+        String normalizedSlug = resolveAutomaticSlug(null, product.getName(), null);
         ensureSlugAvailable(normalizedSlug, null);
 
         product.setSku(normalizedSku);
@@ -267,7 +274,7 @@ public class ProductService {
 
         Product existing = findById(id);
         String normalizedSku = normalizeSku(product.getSku());
-        String normalizedSlug = resolveSlug(product.getName(), product.getSlug());
+        String normalizedSlug = existing.getSlug();
         ensureSkuAvailable(normalizedSku, id);
         ensureSlugAvailable(normalizedSlug, id);
 

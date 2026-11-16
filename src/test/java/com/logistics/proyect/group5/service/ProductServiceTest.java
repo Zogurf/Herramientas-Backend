@@ -37,6 +37,36 @@ class ProductServiceTest {
     }
 
     @Test
+    void getBySlugReturnsProduct() {
+        Product product = Product.builder().id(UUID.randomUUID())
+                .name("Mchose Ace 68").slug("mchose-ace-68").stock(1).build();
+        when(productRepository.findBySlug("mchose-ace-68")).thenReturn(Optional.of(product));
+
+        var response = productService.getBySlug("mchose-ace-68");
+
+        assertEquals(product.getId(), response.getId());
+        assertEquals("mchose-ace-68", response.getSlug());
+    }
+
+    @Test
+    void getBySlugRejectsMissingProduct() {
+        when(productRepository.findBySlug("missing")).thenReturn(Optional.empty());
+        assertThrows(com.logistics.proyect.group5.exception.ResourceNotFoundException.class,
+                () -> productService.getBySlug("missing"));
+    }
+
+    @Test
+    void createAddsSuffixWhenGeneratedSlugAlreadyExists() {
+        Product product = Product.builder().sku("MCH-68").name("Mchose Ace 68")
+                .price(BigDecimal.TEN).stock(1).imageUrl("https://example.com/image.png").build();
+        when(productRepository.findBySlug("mchose-ace-68"))
+                .thenReturn(Optional.of(Product.builder().id(UUID.randomUUID()).build()));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertEquals("mchose-ace-68-2", productService.create(product).getSlug());
+    }
+
+    @Test
     void createNormalizesSkuAndGeneratesSlug() {
         Product product = Product.builder()
                 .sku("  kb-001 ")
