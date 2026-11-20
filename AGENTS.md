@@ -134,14 +134,13 @@ El formulario de inventario no envía slug: las altas generan uno único a parti
 
 ### Paquetes
 
-`PackageController` usa la base `/v1/packages` y exige usuario autenticado: la ruta no está entre las públicas de `SecurityConfig`, así que cae en `anyRequest().authenticated()`. El `POST` toma `sender_id` de `@AuthenticationPrincipal`; `PackageService` genera el `tracking_code` en Java y solo escribe columnas existentes de `package_schema.packages`. El listado acepta `search`/`status`, la consulta por código usa `/track/{trackingCode}` y la actualización de estado requiere rol `ADMIN` y registra un evento en `package_schema.tracking_events`.
+`PackageController` usa la base `/v1/packages` y exige usuario autenticado: la ruta no está entre las públicas de `SecurityConfig`, así que cae en `anyRequest().authenticated()`. El `POST` toma `sender_id` de `@AuthenticationPrincipal`; `PackageService` genera el `tracking_code` en Java y solo escribe columnas existentes de `package_schema.packages`. El listado acepta `search`/`status` y la consulta por código usa `/track/{trackingCode}`.
 
 | Método | Ruta | Acceso | Función |
 |---|---|---|---|
 | `POST` | `/api/v1/packages` | autenticado | Registrar un paquete; el remitente se vincula al usuario autenticado (`201`) |
 | `GET` | `/api/v1/packages` | autenticado | Listar y filtrar por `search` (código, remitente o destinatario) y `status` |
 | `GET` | `/api/v1/packages/track/{trackingCode}` | autenticado | Consultar un paquete por código de seguimiento |
-| `PATCH` | `/api/v1/packages/{id}/status` | ADMIN | Actualizar el estado, ubicación y notas; también registra el evento de seguimiento |
 
 Los controladores devuelven `ResponseEntity`. El registro responde `201 CREATED`; las consultas y acciones satisfactorias responden `200 OK`. Los errores usan `400` (validación o regla de negocio), `403` (sin permisos o sin token), `404` (recurso inexistente) y `401` (credenciales inválidas).
 
