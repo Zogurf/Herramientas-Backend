@@ -15,39 +15,44 @@ public class EmailService {
     @Autowired(required = false)
     private JavaMailSender mailSender;
 
-    @Value("${spring.mail.username:}")
+    @Value("${app.mail.from:}")
     private String mailFrom;
 
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
 
     public void sendPasswordResetEmail(String toEmail, String token) {
-        String resetLink = frontendUrl + "/reset-password?token=" + token;
+        String resetLink = buildResetLink(token);
         String subject = "Recuperación de Contraseña — NEXORA STORE";
 
-        log.info("================================================================================");
         log.info("[EMAIL SERVICE] Solicitud de restablecimiento de contraseña para: {}", toEmail);
-        log.info("[EMAIL SERVICE] Enlace de recuperación: {}", resetLink);
-        log.info("================================================================================");
 
-        if (mailSender != null && mailFrom != null && !mailFrom.isBlank()) {
-            try {
-                MimeMessage mimeMessage = mailSender.createMimeMessage();
-                MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
-
-                helper.setFrom(mailFrom, "NEXORA STORE");
-                helper.setTo(toEmail);
-                helper.setSubject(subject);
-                helper.setText(buildPasswordResetHtml(resetLink), true);
-
-                mailSender.send(mimeMessage);
-                log.info("[EMAIL SERVICE] Correo HTML de recuperación enviado exitosamente a {}", toEmail);
-            } catch (Exception ex) {
-                log.warn("[EMAIL SERVICE] No se pudo enviar el correo SMTP: {}", ex.getMessage());
-            }
-        } else {
-            log.info("[EMAIL SERVICE] Modo sin SMTP — enlace generado en consola para pruebas.");
+        if (mailSender == null || mailFrom == null || mailFrom.isBlank()) {
+            log.warn("[EMAIL SERVICE] SMTP no configurado. Enlace de recuperación para {}: {}",
+                    toEmail, resetLink);
+            return;
         }
+
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+
+            helper.setFrom(mailFrom.trim(), "NEXORA STORE");
+            helper.setTo(toEmail);
+            helper.setSubject(subject);
+            helper.setText(buildPasswordResetHtml(resetLink), true);
+
+            mailSender.send(mimeMessage);
+            log.info("[EMAIL SERVICE] Correo HTML de recuperación enviado exitosamente a {}", toEmail);
+        } catch (Exception ex) {
+            log.error("[EMAIL SERVICE] No se pudo enviar el correo SMTP a {}. Enlace de recuperación: {}",
+                    toEmail, resetLink, ex);
+        }
+    }
+
+    private String buildResetLink(String token) {
+        String baseUrl = frontendUrl == null ? "" : frontendUrl.trim().replaceAll("/+$", "");
+        return baseUrl + "/reset-password?token=" + token;
     }
 
     private String buildPasswordResetHtml(String resetLink) {
