@@ -14,9 +14,10 @@ import lombok.NoArgsConstructor;
 public class ResetPasswordRequest {
 
     @NotBlank(message = "El token de recuperación es obligatorio")
+    @Size(max = 255, message = "El token de recuperación no es válido")
     private String token;
 
     @NotBlank(message = "La nueva contraseña es obligatoria")
-    @Size(min = 6, message = "La contraseña debe tener al menos 6 caracteres")
+    @Size(min = 6, max = 72, message = "La contraseña debe tener entre 6 y 72 caracteres")
     private String newPassword;
 }

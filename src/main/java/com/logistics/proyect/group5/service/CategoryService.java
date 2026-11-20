@@ -40,13 +40,13 @@ public class CategoryService {
 
     public Category findById(Integer id) {
         return categoryRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("La categoría no existe."));
+                .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada."));
     }
 
     public Category findBySlug(String slug) {
         String normalizedSlug = normalizeSlug(slug);
         return categoryRepository.findBySlug(normalizedSlug)
-                .orElseThrow(() -> new IllegalArgumentException("La categoría no existe."));
+                .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada."));
     }
 
     @Transactional
@@ -96,6 +96,9 @@ public class CategoryService {
         Category category = findById(id);
         if (productRepository.existsByCategoryId(id)) {
             throw new IllegalArgumentException("No se puede eliminar la categoría: hay productos que la están usando.");
+        }
+        if (categoryRepository.existsByParent_Id(id)) {
+            throw new IllegalArgumentException("No se puede eliminar la categoría: tiene subcategorías asociadas.");
         }
         categoryRepository.delete(category);
     }
@@ -165,25 +168,45 @@ public class CategoryService {
     }
     @Transactional(readOnly = true)
     public List<CategoryResponse> list() {
-        return categoryRepository.findAllByOrderByNameAsc().stream()
+        // Endpoint público: no expone categorías desactivadas.
+        return categoryRepository.findByActiveTrueOrderByNameAsc().stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public CategoryResponse get(Integer id) {
-        return toResponse(findOrThrow(id));
+        Category category = findOrThrow(id);
+        if (!category.isActive()) {
+            throw new ResourceNotFoundException("Categoría no encontrada.");
+        }
+        return toResponse(category);
     }
 
     @Transactional
     public CategoryResponse create(CategoryRequest request) {
-        String slug = resolveAutomaticSlug(request.getSlug(), request.getName(), null);
+        String name = normalizeName(request.getName());
+        if (name.isBlank()) {
+            throw new IllegalArgumentException("El nombre de la categoría es obligatorio.");
+        }
+        if (name.length() > 100) {
+            throw new IllegalArgumentException("El nombre de la categoría no puede superar 100 caracteres.");
+        }
+
+        String description = normalizeOptionalText(request.getDescription());
+        if (description != null && description.length() > 2000) {
+            throw new IllegalArgumentException("La descripción no puede superar 2000 caracteres.");
+        }
+
+        Category parent = request.getParentId() == null ? null : findById(request.getParentId());
+        String slug = resolveAutomaticSlug(request.getSlug(), name, null);
 
         Category category = Category.builder()
-                .name(request.getName().trim())
+                .name(name)
                 .slug(slug)
-                .description(request.getDescription())
-                .active(request.getIsActive() == null || request.getIsActive())
+                .description(description)
+                .parent(parent)
+                .active(request.getActive() == null || request.getActive())
                 .build();
 
         return toResponse(categoryRepository.save(category));
@@ -193,20 +216,40 @@ public class CategoryService {
     public CategoryResponse update(Integer id, CategoryRequest request) {
         Category category = findOrThrow(id);
 
-        if (request.getName() != null && !request.getName().isBlank()) {
-            category.setName(request.getName().trim());
+        if (request.getName() != null) {
+            String name = normalizeName(request.getName());
+            if (name.isBlank()) {
+                throw new IllegalArgumentException("El nombre de la categoría es obligatorio.");
+            }
+            if (name.length() > 100) {
+                throw new IllegalArgumentException("El nombre de la categoría no puede superar 100 caracteres.");
+            }
+            category.setName(name);
         }
+
         if (request.getSlug() != null && !request.getSlug().isBlank()) {
             String slug = SlugUtils.slugify(request.getSlug());
             if (!slug.isBlank() && !slug.equals(category.getSlug())) {
                 category.setSlug(resolveAutomaticSlug(slug, null, category.getId()));
             }
         }
+
         if (request.getDescription() != null) {
-            category.setDescription(request.getDescription());
+            String description = normalizeOptionalText(request.getDescription());
+            if (description != null && description.length() > 2000) {
+                throw new IllegalArgumentException("La descripción no puede superar 2000 caracteres.");
+            }
+            category.setDescription(description);
         }
-        if (request.getIsActive() != null) {
-            category.setActive(request.getIsActive());
+
+        if (request.isParentIdProvided()) {
+            Category parent = request.getParentId() == null ? null : findById(request.getParentId());
+            validateParentHierarchy(category, parent);
+            category.setParent(parent);
+        }
+
+        if (request.getActive() != null) {
+            category.setActive(request.getActive());
         }
 
         return toResponse(categoryRepository.save(category));
@@ -247,6 +290,7 @@ public class CategoryService {
         response.setName(category.getName());
         response.setSlug(category.getSlug());
         response.setDescription(category.getDescription());
+        response.setParentId(category.getParent() == null ? null : category.getParent().getId());
         response.setIsActive(category.isActive());
         response.setCreatedAt(category.getCreatedAt());
         return response;

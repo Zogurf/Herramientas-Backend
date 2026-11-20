@@ -9,7 +9,7 @@ API REST construida con Java 21, Spring Boot 4.1.1 y Maven. Incluye autenticaci�
 - **Persistencia:** PostgreSQL con Spring Data JPA; entidades de autenticación en `auth_schema`.
 - **Autenticación:** Spring Security, JWT (`jjwt` 0.12.5) y BCrypt; login con Google verificando el `id_token` contra `google.client-id` (`AuthService.loginWithGoogle`) y login con Facebook verificando el access token contra la Graph API con `debug_token` y las credenciales `facebook.client-id` / `facebook.client-secret` (`AuthService.loginWithFacebook`).
 - **Archivos:** Cloudinary.
-- **Correo:** Spring Mail / SMTP para recuperación de contraseña.
+- **Correo:** Spring Mail / SMTP para recuperación de contraseña (Brevo en el puerto 2525 en Render Free, porque los puertos 25/465/587 están bloqueados).
 - **Despliegue local/contenedor:** Dockerfile multi-stage y Docker Compose, que incluye PostgreSQL local opcional y pgAdmin. El despliegue en la nube (Render) queda descrito por `render.yaml` (Blueprint del servicio Docker y de sus variables) y `DEPLOY-RENDER.md` (checklist de puesta en marcha).
 
 ## 2. Estructura del código
@@ -74,7 +74,7 @@ Controlador con base `/v1/auth`, por lo que las rutas externas son:
 
 ### Catálogo (productos y categorías)
 
-Las entidades `Product` y `Category` mapean **`store_schema`** (`ddl-auto=none`; el esquema manda). La lectura es pública; toda escritura exige rol `ADMIN` mediante `@PreAuthorize("hasRole('ADMIN')")`.
+Las entidades `Product` y `Category` mapean **`store_schema`** (`ddl-auto=none`; el esquema manda). La lectura es pública; toda escritura exige rol `ADMIN` mediante `@PreAuthorize("hasRole('ADMIN')")`. Los endpoints públicos **solo exponen registros activos**: un producto o categoría con `is_active = false` se comporta como inexistente (`404`) y no aparece en los listados. Los endpoints `/admin/**` sí ven activos e inactivos.
 
 | Método | Ruta | Acceso | Función |
 |---|---|---|---|
@@ -92,7 +92,7 @@ Las entidades `Product` y `Category` mapean **`store_schema`** (`ddl-auto=none`;
 | `PUT` | `/api/categories/{id}` | ADMIN | Actualizar categoría (JSON) |
 | `DELETE` | `/api/categories/{id}` | ADMIN | Eliminar categoría (`400` si hay productos que la usan) |
 
-Campos aceptados al crear/actualizar un producto: `name` (obligatorio), `price` (obligatorio, ≥ 0), `stock`, `categoryId`, `sku` y `slug` (se autogeneran si se omiten y se garantiza su unicidad), `description`, `imageUrl` e `imageHoverUrl`. Si se envía el archivo `file` en la petición, se sube a Cloudinary y tiene prioridad sobre `imageUrl`; si no hay archivo ni `imageUrl`, la creación responde `400` porque la columna es `NOT NULL`.
+Campos aceptados al crear/actualizar un producto: `name` (obligatorio al crear), `price` (obligatorio al crear, ≥ 0 y menor que `100000000.00` para caber en `NUMERIC(10,2)`), `stock` (entero ≥ 0), `categoryId`, `sku` y `slug` (se autogeneran si se omiten y se garantiza su unicidad), `description`, `imageUrl` e `imageHoverUrl`. Si se envía el archivo `file` en la petición, se sube a Cloudinary y tiene prioridad sobre `imageUrl`; si no hay archivo ni `imageUrl`, la creación responde `400` porque la columna es `NOT NULL`. En actualizaciones parciales, omitir `categoryId` conserva la categoría actual y enviar `categoryId: null` la quita; el resto de campos omitidos también se conservan. Los `PUT` no vuelven a generar `sku`/`slug` si no se envían.
 
 ### Administración del catálogo e inventario
 
@@ -117,7 +117,7 @@ Campos aceptados al crear/actualizar un producto: `name` (obligatorio), `price` 
 | `POST` | `/api/admin/categories` | Crear categoría (JSON) |
 | `PUT` | `/api/admin/categories/{id}` | Actualizar categoría (JSON) |
 | `PATCH` | `/api/admin/categories/{id}/deactivate` | Desactivar categoría |
-| `DELETE` | `/api/admin/categories/{id}` | Eliminar categoría (`204`; `400` si tiene productos) |
+| `DELETE` | `/api/admin/categories/{id}` | Eliminar categoría (`204`; `400` si tiene productos o subcategorías) |
 
 El formulario de inventario no envía slug: las altas generan uno único a partir del nombre (con sufijos si se repite) y las ediciones conservan el slug existente para mantener estables los enlaces públicos. La tienda enlaza mediante `/producto/{slug}` y sustituye las direcciones antiguas por UUID al cargar el producto.
 
@@ -142,7 +142,30 @@ El formulario de inventario no envía slug: las altas generan uno único a parti
 | `GET` | `/api/v1/packages` | autenticado | Listar y filtrar por `search` (código, remitente o destinatario) y `status` |
 | `GET` | `/api/v1/packages/track/{trackingCode}` | autenticado | Consultar un paquete por código de seguimiento |
 
-Los controladores devuelven `ResponseEntity`. El registro responde `201 CREATED`; las consultas y acciones satisfactorias responden `200 OK`. Los errores usan `400` (validación o regla de negocio), `403` (sin permisos o sin token), `404` (recurso inexistente) y `401` (credenciales inválidas).
+Los controladores devuelven `ResponseEntity`. El registro responde `201 CREATED`; las consultas y acciones satisfactorias responden `200 OK`; los borrados, `204 NO CONTENT`.
+
+### Validación y contrato de errores
+
+Las peticiones se validan con Bean Validation en los DTO (`@Size`, `@Pattern`, `@Min`, `@DecimalMin`, `@Digits`, `@Positive`, etc.) y con reglas de negocio en los servicios. Los mensajes y límites del frontend deben replicar los del backend; los cambios de límites se hacen en ambos lados. En el auto-registro, `RegisterRequest.fullName` rechaza dígitos (`@Pattern`) y el formulario valida nombre y apellido antes de enviar con los mensajes «El nombre no puede contener números» y «El apellido no puede contener números».
+
+`GlobalExceptionHandler` centraliza las respuestas JSON (`timestamp`, `status`, `error`, `message` y, cuando aplica, `details` por campo):
+
+| Situación | Código | Cuerpo |
+|---|---|---|
+| Campos inválidos (`MethodArgumentNotValidException`) | `400` | `details` asocia cada campo con su mensaje |
+| JSON malformado, cuerpo ausente o tipo incorrecto | `400` | Mensaje genérico; no filtra detalles internos |
+| UUID o parámetro con tipo inválido, parámetro/parte faltante | `400` | Mensaje descriptivo |
+| Regla de negocio (`IllegalArgumentException`) | `400` | Mensaje de la regla |
+| Recurso inexistente (`ResourceNotFoundException`) | `404` | Mensaje con el identificador |
+| Ruta inexistente (`NoResourceFoundException`) | `404` | Mensaje genérico |
+| Credenciales inválidas | `401` | Mensaje de autenticación |
+| Sin token o sin rol suficiente | `403` | Mensaje de acceso denegado |
+| Conflicto de integridad (`DataIntegrityViolationException`) | `409` | Mensaje sin SQL ni nombres de tablas |
+| Archivo mayor a 10 MB | `413` | Mensaje de tamaño |
+| `Content-Type` no soportado | `415` | Mensaje de tipo de contenido |
+| Error no controlado | `500` | Mensaje genérico; el detalle solo va al log |
+
+Los DTO de entrada con campos opcionales que distinguen “omitido” de `null` (por ejemplo `categoryId` / `parentId`) usan un setter anotado con `@JsonSetter` y un flag de presencia. En Spring Boot 4 / Jackson 3, `FAIL_ON_NULL_FOR_PRIMITIVES` está activo: evita `boolean` primitivos en DTO de entrada y mantén el constructor de todos los argumentos de Lombok fuera de la API pública (`@AllArgsConstructor(access = AccessLevel.PRIVATE)`) para que Jackson use el constructor sin argumentos y los setters. `ApplicationTests` cubre esta regresión.
 
 ### Actuator (observabilidad)
 
@@ -167,7 +190,7 @@ Las credenciales salen de `MANAGEMENT_USER` / `MANAGEMENT_PASSWORD` (`monitoring
 
 ## 5. Configuración y operación
 
-Las credenciales y valores de entorno deben permanecer fuera del código y de los commits. `application.properties` espera variables como `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `JWT_SECRET`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `GOOGLE_CLIENT_ID`, `FACEBOOK_CLIENT_ID` y `FACEBOOK_CLIENT_SECRET`. La URL de frontend se configura con `FRONTEND_URL` (predeterminada a `http://localhost:3000`), los orígenes permitidos por CORS con `CORS_ALLOWED_ORIGINS` (por defecto, los de desarrollo local) y `FACEBOOK_API_VERSION` fija la versión de la Graph API (por defecto `v26.0`). Docker Compose carga un archivo `.env` local.
+Las credenciales y valores de entorno deben permanecer fuera del código y de los commits. `application.properties` espera variables como `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `JWT_SECRET`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `GOOGLE_CLIENT_ID`, `FACEBOOK_CLIENT_ID` y `FACEBOOK_CLIENT_SECRET`. En Render Free los puertos SMTP 25/465/587 están bloqueados; por eso el blueprint usa Brevo en el puerto 2525 (`MAIL_HOST=smtp-relay.brevo.com`, `MAIL_PORT=2525`, `MAIL_SSL_TRUST=smtp-relay.brevo.com`, `MAIL_FROM` verificado). `EmailService` aplica timeouts de 10 s para no colgar la petición. La URL de frontend se configura con `FRONTEND_URL` (predeterminada a `http://localhost:3000`), los orígenes permitidos por CORS con `CORS_ALLOWED_ORIGINS` (por defecto, los de desarrollo local) y `FACEBOOK_API_VERSION` fija la versión de la Graph API (por defecto `v26.0`). Docker Compose carga un archivo `.env` local.
 
 **Configuración de Spring repartida en dos archivos (ya sin contradicciones):** `application.properties` define el contexto `/api` y es la **única fuente** de `ddl-auto` (predeterminado `none`, sobrescribible con `SPRING_JPA_HIBERNATE_DDL_AUTO`); `application.yml` define el nombre de la app, el datasource, `hibernate.default_schema: auth_schema`, `format_sql` y JWT, y **ya no declara** `ddl-auto`. No hay dos valores distintos de `ddl-auto`, por lo que se eliminó la ambigüedad previa. El esquema SQL (`schema.sql` / `init.sql`) es la fuente de verdad: incluye `provider` / `provider_id` en `auth_schema.users`, bloques de reconciliación idempotentes para bases existentes (columnas de `users`, RBAC, catálogo `store_schema` y paquetería `package_schema`) y `schema.sql` puede re-ejecutarse sin error (los tipos `ENUM` se crean de forma idempotente); `init.sql` es un script de arranque único para la base local. Al cambiar configuración, verifica el perfil y las propiedades efectivas.
 
@@ -176,6 +199,8 @@ Las credenciales y valores de entorno deben permanecer fuera del código y de lo
 **Ojo con `store_schema` en la base administrada:** sus tablas se crearon en algún momento desde entidades Hibernate, por lo que `categories.id` no tenía identidad y faltaban los `DEFAULT` declarados en `schema.sql`. El bloque de reconciliación del catálogo (en ambos scripts) los restaura de forma idempotente; si añades columnas nuevas al catálogo, aplícalas también ahí.
 
 El proyecto utiliza InsForge como PostgreSQL administrado cuando `SPRING_DATASOURCE_URL` apunta a ese servicio. La CLI de InsForge se configura por separado en `.insforge/project.json`; nunca copies credenciales de aplicación o CLI a esta guía.
+
+**CI/CD (GitHub Actions + Render):** `.github/workflows/test.yml` se ejecuta en cada push/PR a `dev` con un contenedor PostgreSQL 16 y `./mvnw -B test`; si falla, no hay deploy. `.github/workflows/deploy.yml` usa `workflow_run` para disparar el Deploy Hook de Render (`RENDER_DEPLOY_HOOK_URL`, secret del repo) solo cuando el CI terminó bien en un push a `dev`. `render.yaml` fija `autoDeployTrigger: 'off'`, así que Render no despliega por su cuenta. El workflow de deploy vive en la rama por defecto (`main`) porque `workflow_run` solo se evalúa desde ahí; los cambios a ese archivo deben mergearse a `main` para surtir efecto.
 
 **Observabilidad:** conviven dos registries de Micrometer. `micrometer-registry-prometheus` sirve el scrape local en `/api/actuator/prometheus`; `micrometer-registry-otlp` empuja a Grafana Cloud y está **apagado por defecto** (`management.otlp.metrics.export.enabled=${OTLP_ENABLED:false}`). En local, `docker compose up -d prometheus grafana` levanta Prometheus (`:9090`) y Grafana (`:3001`, porque el 3000 es del frontend) con datasource, dashboard y alertas aprovisionados; el detalle está en `observability/README.md`. Prometheus no expande variables en su YAML, por eso `observability/prometheus/render-config.sh` genera la configuración con `PROM_USER`, `PROM_PASS` y `PROM_TARGET` (este último permite alternar entre `host.docker.internal:8080` y `backend:8080`). En Linux con UFW los contenedores no alcanzan los puertos del host: hay que aplicar una vez `sudo observability/scripts/allow-docker-to-backend.sh`. En Render no se autohospeda nada (plan Free sin discos persistentes y con spin-down): el blueprint activa el push OTLP y usa `/api/actuator/health/liveness` como sonda para no reiniciar el servicio cuando falla la base de datos.
 
@@ -199,6 +224,7 @@ Usa el HTML para inspeccionar nodos, archivos de origen y conexiones al modifica
 3. Inyecta configuración mediante propiedades de Spring y variables de entorno; nunca hardcodees ni publiques credenciales.
 4. Conserva la coherencia entre entidades JPA y los esquemas PostgreSQL definidos en `schema.sql` / `init.sql`. El esquema es la fuente de verdad (`ddl-auto=none`): al añadir o renombrar columnas, actualiza ambos scripts **y** el bloque de migración idempotente para bases ya existentes.
 5. Antes de cambiar rutas o reglas de acceso, revisa `server.servlet.context-path` y `SecurityConfig` para considerar el prefijo externo `/api`.
+6. Al añadir DTO de entrada, replica los límites del frontend, documenta el campo en este archivo y añade una prueba de validación o deserialización cuando la regla no sea obvia.
 
 <!-- INSFORGE:START -->
 ## InsForge backend

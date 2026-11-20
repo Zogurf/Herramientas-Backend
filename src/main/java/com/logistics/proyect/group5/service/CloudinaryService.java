@@ -2,12 +2,14 @@ package com.logistics.proyect.group5.service;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.Map;
 
+@Slf4j
 @Service
 public class CloudinaryService {
 
@@ -39,17 +41,29 @@ public class CloudinaryService {
         }
     }
 
+    /**
+     * Borrado best-effort: si la URL no es de Cloudinary o el borrado remoto
+     * falla, se registra y se continúa. El producto local debe poder eliminarse
+     * aunque la imagen ya no exista o venga de otro proveedor.
+     */
     public void deleteImage(String imageUrl) {
-        if (imageUrl == null || imageUrl.isBlank()) {
+        if (imageUrl == null || imageUrl.isBlank() || !imageUrl.contains("cloudinary.com")) {
+            return;
+        }
+        String publicId;
+        try {
+            publicId = extractPublicId(imageUrl);
+        } catch (IllegalArgumentException ex) {
+            log.warn("No se pudo interpretar la URL de Cloudinary '{}': {}", imageUrl, ex.getMessage());
             return;
         }
         try {
             cloudinary.uploader().destroy(
-                    extractPublicId(imageUrl),
+                    publicId,
                     ObjectUtils.asMap("resource_type", "image")
             );
-        } catch (IOException e) {
-            throw new IllegalStateException("No se pudo eliminar la imagen de Cloudinary.", e);
+        } catch (IOException | RuntimeException ex) {
+            log.warn("No se pudo eliminar la imagen '{}' de Cloudinary: {}", publicId, ex.getMessage());
         }
     }
 

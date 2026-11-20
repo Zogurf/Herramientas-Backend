@@ -20,6 +20,8 @@ public interface CategoryRepository extends JpaRepository<Category, Integer> {
 
     List<Category> findByActiveTrue();
 
+    List<Category> findByActiveTrueOrderByNameAsc();
+
     List<Category> findByNameContainingIgnoreCase(String name);
 
     boolean existsByParent_Id(Integer parentId);

@@ -91,7 +91,22 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Autenticación pública
+                        // Endpoints de auth que sí exigen sesión. Deben declararse
+                        // antes del permitAll de /v1/auth/** (gana la primera regla).
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/v1/auth/me", "/api/v1/auth/me", "/auth/me"
+                        ).authenticated()
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/v1/auth/profile", "/api/v1/auth/profile", "/auth/profile"
+                        ).authenticated()
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/v1/auth/profile/avatar", "/api/v1/auth/profile/avatar", "/auth/profile/avatar"
+                        ).authenticated()
+
+                        // Autenticación pública (login, registro, recuperación y logout)
                         .requestMatchers(
                                 "/v1/auth/**",
                                 "/api/v1/auth/**",

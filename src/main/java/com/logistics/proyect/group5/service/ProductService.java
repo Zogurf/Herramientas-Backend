@@ -29,6 +29,9 @@ import com.logistics.proyect.group5.dto.InventoryStatsResponse;
 @Transactional(readOnly = true)
 public class ProductService {
 
+    /** Límite de {@code NUMERIC(10,2)}: el valor debe ser menor que 10^8. */
+    private static final BigDecimal MAX_PRICE = new BigDecimal("100000000.00");
+
     private final ProductRepository productRepository;
     private final CategoryService categoryService;
     private final CloudinaryService cloudinaryService;
@@ -41,13 +44,18 @@ public class ProductService {
         return toResponses(productRepository.findAllByOrderByCreatedAtDesc());
     }
 
+    /** Lectura pública: un producto inactivo se comporta como inexistente. */
     public ProductResponse get(UUID id) {
-        return toResponse(productRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + id)), null);
+        Product product = productRepository.findById(id)
+                .filter(Product::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + id));
+        return toResponse(product, null);
     }
 
     public ProductResponse getBySlug(String slug) {
+        // Endpoint público: un producto inactivo se comporta como inexistente.
         return toResponse(productRepository.findBySlug(slug)
+                .filter(Product::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + slug)), null);
     }
 
@@ -59,6 +67,9 @@ public class ProductService {
         }
         if (request.getPrice() == null || request.getPrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("El precio debe ser mayor o igual a cero.");
+        }
+        if (request.getPrice().compareTo(MAX_PRICE) >= 0) {
+            throw new IllegalArgumentException("El precio debe ser menor a 100000000.00.");
         }
         if (request.getStock() != null && request.getStock() < 0) {
             throw new IllegalArgumentException("El stock debe ser mayor o igual a cero.");
@@ -111,6 +122,9 @@ public class ProductService {
             if (request.getPrice().compareTo(BigDecimal.ZERO) < 0) {
                 throw new IllegalArgumentException("El precio no puede ser negativo.");
             }
+            if (request.getPrice().compareTo(MAX_PRICE) >= 0) {
+                throw new IllegalArgumentException("El precio debe ser menor a 100000000.00.");
+            }
             product.setPrice(request.getPrice());
         }
 
@@ -121,7 +135,7 @@ public class ProductService {
             product.setStock(request.getStock());
         }
 
-        if (request.getCategoryId() != null) {
+        if (request.isCategoryIdProvided()) {
             product.setCategory(resolveCategoryId(request.getCategoryId()));
         }
 
@@ -225,12 +239,12 @@ public class ProductService {
 
     public Product findById(UUID id) {
         return productRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("El producto no existe."));
+                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + id));
     }
 
     public Product findBySku(String sku) {
         return productRepository.findBySku(normalizeSku(sku))
-                .orElseThrow(() -> new IllegalArgumentException("El producto no existe."));
+                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado con SKU: " + sku));
     }
 
     @Transactional
@@ -455,6 +469,9 @@ public class ProductService {
         }
         if (product.getPrice() == null || product.getPrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("El precio debe ser mayor o igual a cero.");
+        }
+        if (product.getPrice().compareTo(MAX_PRICE) >= 0) {
+            throw new IllegalArgumentException("El precio debe ser menor a 100000000.00.");
         }
         if (product.getStock() == null || product.getStock() < 0) {
             throw new IllegalArgumentException("El stock debe ser mayor o igual a cero.");
