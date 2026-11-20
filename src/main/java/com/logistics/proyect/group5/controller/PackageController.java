@@ -11,6 +11,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/v1/packages")
 @RequiredArgsConstructor
@@ -23,5 +25,17 @@ public class PackageController {
             @AuthenticationPrincipal User user) {
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(packageService.create(request, user.getId()));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<PackageResponse>> list(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "ALL") String status) {
+        return ResponseEntity.ok(packageService.findAll(search, status));
+    }
+
+    @GetMapping("/track/{trackingCode}")
+    public ResponseEntity<PackageResponse> findByTrackingCode(@PathVariable String trackingCode) {
+        return ResponseEntity.ok(packageService.findByTrackingCode(trackingCode));
     }
 }
