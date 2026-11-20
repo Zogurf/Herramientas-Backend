@@ -3,6 +3,7 @@ package com.logistics.proyect.group5.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.logistics.proyect.group5.dto.CreatePackageRequest;
 import com.logistics.proyect.group5.dto.PackageResponse;
+import com.logistics.proyect.group5.dto.UpdatePackageStatusRequest;
 import com.logistics.proyect.group5.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -121,6 +122,39 @@ class PackageServiceTest {
 
         assertEquals("NX-ABC", response.trackingCode());
         verify(jdbc).query(contains("UPPER(p.tracking_code) = ?"), anyRowMapper(), eq("NX-ABC"));
+    }
+
+    @Test
+    void updateStatusPersistsPackageAndTrackingEvent() throws Exception {
+        UUID id = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.parse("2026-11-19T20:00:00Z");
+        when(jdbc.update(contains("UPDATE package_schema.packages"), any(Object[].class))).thenReturn(1);
+        when(jdbc.query(contains("WHERE p.id = ?"), anyRowMapper(), eq(id)))
+                .thenAnswer(invocation -> {
+                    ResultSet rs = packageResultSet(id, "NX-ABC", now);
+                    when(rs.getString("status")).thenReturn("EN_TRANSITO");
+                    return List.of(rowMapper(invocation).mapRow(rs, 1));
+                });
+
+        PackageResponse response = packageService.updateStatus(id,
+                new UpdatePackageStatusRequest(" en_transito ", " Hub Arequipa ", "  Salió a ruta  "));
+
+        assertEquals("EN_TRANSITO", response.status());
+        verify(jdbc).update(contains("UPDATE package_schema.packages"), eq("EN_TRANSITO"), eq(id));
+        verify(jdbc).update(contains("INSERT INTO package_schema.tracking_events"),
+                eq(id), eq("EN_TRANSITO"), eq("Hub Arequipa"), eq("Salió a ruta"));
+    }
+
+    @Test
+    void updateStatusReturnsNotFoundWhenPackageDoesNotExist() {
+        UUID id = UUID.randomUUID();
+        when(jdbc.update(contains("UPDATE package_schema.packages"), any(Object[].class))).thenReturn(0);
+
+        assertThrows(ResourceNotFoundException.class, () -> packageService.updateStatus(id,
+                new UpdatePackageStatusRequest("EN_TRANSITO", "Hub Lima", null)));
+
+        verify(jdbc, never()).update(contains("INSERT INTO package_schema.tracking_events"),
+                any(Object[].class));
     }
 
     @Test

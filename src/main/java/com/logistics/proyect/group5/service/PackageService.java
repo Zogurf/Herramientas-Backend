@@ -2,6 +2,7 @@ package com.logistics.proyect.group5.service;
 
 import com.logistics.proyect.group5.dto.CreatePackageRequest;
 import com.logistics.proyect.group5.dto.PackageResponse;
+import com.logistics.proyect.group5.dto.UpdatePackageStatusRequest;
 import com.logistics.proyect.group5.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -94,6 +95,40 @@ public class PackageService {
         sql.append(" ORDER BY p.created_at DESC, p.id DESC");
 
         return jdbc.query(sql.toString(), PACKAGE_ROW_MAPPER, parameters.toArray());
+    }
+
+    @Transactional
+    public PackageResponse updateStatus(UUID packageId, UpdatePackageStatusRequest request) {
+        String status = request.newStatus().trim().toUpperCase(Locale.ROOT);
+        if (!PACKAGE_STATUSES.contains(status)) {
+            throw new IllegalArgumentException("Estado de envío no válido.");
+        }
+
+        String location = request.location().trim();
+        String notes = request.notes() == null || request.notes().isBlank()
+                ? null
+                : request.notes().trim();
+
+        int updatedRows = jdbc.update("""
+                UPDATE package_schema.packages
+                   SET current_status = ?::package_schema.package_status,
+                       updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?
+                """, status, packageId);
+        if (updatedRows == 0) {
+            throw new ResourceNotFoundException("Envío no encontrado.");
+        }
+
+        jdbc.update("""
+                INSERT INTO package_schema.tracking_events
+                    (package_id, status, location, description)
+                VALUES (?, ?::package_schema.package_status, ?, ?)
+                """, packageId, status, location, notes);
+
+        return jdbc.query(PACKAGE_SELECT + " WHERE p.id = ?", PACKAGE_ROW_MAPPER, packageId)
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Envío no encontrado."));
     }
 
     public PackageResponse findByTrackingCode(String trackingCode) {
