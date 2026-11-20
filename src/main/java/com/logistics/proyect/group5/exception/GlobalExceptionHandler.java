@@ -163,7 +163,7 @@ public class GlobalExceptionHandler {
         return errorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Error Interno del Servidor",
-                "Ocurrió un error interno. Inténtalo de nuevo más tarde.",
+                "No se pudo completar la solicitud",
                 null);
     }
 
