@@ -2,6 +2,7 @@ package com.logistics.proyect.group5.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.BindException;
@@ -9,6 +10,8 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -16,6 +19,7 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationExceptions(MethodArgumentNotValidException ex) {
@@ -26,6 +30,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BindException.class)
     public ResponseEntity<Map<String, Object>> handleBindExceptions(BindException ex) {
         return validationErrorResponse(ex.getBindingResult());
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleUnreadableRequest(HttpMessageNotReadableException ex) {
+        return errorResponse(HttpStatus.BAD_REQUEST, "Solicitud Inválida",
+                "Revisa el formato y los campos enviados");
     }
 
     private ResponseEntity<Map<String, Object>> validationErrorResponse(BindingResult bindingResult) {
@@ -88,12 +98,18 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
+        LOGGER.error("Error interno procesando la solicitud", ex);
+        return errorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Error Interno del Servidor",
+                "No se pudo completar la solicitud");
+    }
+
+    private ResponseEntity<Map<String, Object>> errorResponse(
+            HttpStatus status, String error, String message) {
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", LocalDateTime.now());
-        response.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
-        response.put("error", "Error Interno del Servidor");
-        response.put("message", ex.getMessage());
-
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        response.put("status", status.value());
+        response.put("error", error);
+        response.put("message", message);
+        return ResponseEntity.status(status).body(response);
     }
 }
