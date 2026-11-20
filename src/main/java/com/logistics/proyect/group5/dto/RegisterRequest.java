@@ -17,6 +17,7 @@ public class RegisterRequest {
 
     @NotBlank(message = "El nombre completo es obligatorio")
     @Size(max = 150, message = "El nombre no puede superar 150 caracteres")
+    @Pattern(regexp = "^[^0-9]*$", message = "El nombre no puede contener números")
     private String fullName;
 
     @NotBlank(message = "El correo electrónico es obligatorio")

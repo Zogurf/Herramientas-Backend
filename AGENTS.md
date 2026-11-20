@@ -146,7 +146,7 @@ Los controladores devuelven `ResponseEntity`. El registro responde `201 CREATED`
 
 ### Validación y contrato de errores
 
-Las peticiones se validan con Bean Validation en los DTO (`@Size`, `@Pattern`, `@Min`, `@DecimalMin`, `@Digits`, `@Positive`, etc.) y con reglas de negocio en los servicios. Los mensajes y límites del frontend deben replicar los del backend; los cambios de límites se hacen en ambos lados.
+Las peticiones se validan con Bean Validation en los DTO (`@Size`, `@Pattern`, `@Min`, `@DecimalMin`, `@Digits`, `@Positive`, etc.) y con reglas de negocio en los servicios. Los mensajes y límites del frontend deben replicar los del backend; los cambios de límites se hacen en ambos lados. En el auto-registro, `RegisterRequest.fullName` rechaza dígitos (`@Pattern`) y el formulario valida nombre y apellido antes de enviar con los mensajes «El nombre no puede contener números» y «El apellido no puede contener números».
 
 `GlobalExceptionHandler` centraliza las respuestas JSON (`timestamp`, `status`, `error`, `message` y, cuando aplica, `details` por campo):
 
