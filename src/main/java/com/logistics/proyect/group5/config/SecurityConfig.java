@@ -131,7 +131,10 @@ public class SecurityConfig {
                         // Paquetes y seguimiento
                         .requestMatchers(
                                 "/packages/**",
-                                "/tracking/**"
+                                "/tracking/**",
+                                // Seguimiento público por código de guía (paquetes).
+                                "/v1/tracking/**",
+                                "/api/v1/tracking/**"
                         ).permitAll()
 
                         // Documentación y errores

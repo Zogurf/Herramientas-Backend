@@ -43,12 +43,13 @@ Herramientas-Backend/
     │   ├── AdminProductController.java   # Inventario admin: listado paginado, métricas y exportaciones
     │   ├── AdminCategoryController.java  # Gestión admin de categorías
     │   ├── PackageController.java    # Registro de paquetes del usuario autenticado
+    │   ├── PackageTrackingController.java # Seguimiento público de paquetes por código
     │   └── TrackingController.java   # Historial de tracking público y registro de eventos (ADMIN)
     ├── dto/                          # Peticiones y respuestas de auth, perfil, recuperación, Google, Facebook, catálogo, paquetes y tracking
     ├── exception/                    # Respuestas globales de errores, validación y ResourceNotFoundException
     ├── model/                        # User, Product (store_schema), Category, PasswordResetToken, TrackingEvent y enums
     ├── repository/                   # Repositorios JPA de usuarios, productos, categorías, tokens y eventos de tracking
-    └── service/                      # AuthService, ProductService, CategoryService, PackageService, TrackingService, CloudinaryService, EmailService, InventoryExportService, SlugUtils
+    └── service/                      # AuthService, ProductService, CategoryService, PackageService, PackageTrackingService, TrackingService, CloudinaryService, EmailService, InventoryExportService, SlugUtils
 ```
 
 ## 3. API HTTP
@@ -128,6 +129,7 @@ El formulario de inventario no envía slug: las altas generan uno único a parti
 | Método | Ruta | Acceso | Función |
 |---|---|---|---|
 | `GET` | `/api/tracking/{orderId}` | público | Historial de eventos de un pedido (UUID) |
+| `GET` | `/api/v1/tracking/{trackingCode}` | público | Seguimiento de un paquete por código de guía (datos del envío e historial) |
 | `POST` | `/api/tracking` | ADMIN | Registrar un evento de tracking |
 
 `SecurityConfig` permite `/tracking/**` sin token y el `POST` queda protegido por `@PreAuthorize("hasRole('ADMIN')")`. La regla `permitAll` de `/packages/**` no cubre el controlador real de paquetes (`/v1/packages`), que exige autenticación.
@@ -135,6 +137,8 @@ El formulario de inventario no envía slug: las altas generan uno único a parti
 ### Paquetes
 
 `PackageController` usa la base `/v1/packages` y exige usuario autenticado: la ruta no está entre las públicas de `SecurityConfig`, así que cae en `anyRequest().authenticated()`. El `POST` toma `sender_id` de `@AuthenticationPrincipal`; `PackageService` genera el `tracking_code` en Java y solo escribe columnas existentes de `package_schema.packages`. El listado acepta `search`/`status` y la consulta por código usa `/track/{trackingCode}`.
+
+`PackageTrackingController` expone `GET /v1/tracking/{trackingCode}` sin sesión (la regla `permitAll` cubre `/v1/tracking/**`). `PackageTrackingService` consulta el paquete y `package_schema.tracking_events` con `JdbcTemplate`; si el paquete aún no tiene eventos, sintetiza el evento `REGISTRADO` con la fecha de creación. El historial se devuelve del más reciente al más antiguo y las fechas viajan en ISO-8601 para que el frontend las formatee en `America/Lima`.
 
 | Método | Ruta | Acceso | Función |
 |---|---|---|---|
@@ -177,7 +181,7 @@ Los DTO de entrada con campos opcionales que distinguen “omitido” de `null` 
 | `GET` | `/api/actuator/info` | público | Información de la aplicación |
 | `GET` | `/api/actuator/prometheus` | Basic auth, rol `MONITOR` | Métricas para el scrape local |
 
-Las credenciales salen de `MANAGEMENT_USER` / `MANAGEMENT_PASSWORD` (`monitoring.user` / `monitoring.password`). Si falta cualquiera, esa cadena falla cerrada con `401` y no recurre a credenciales por defecto. El proveedor se registra solo en el `AuthenticationManager` de la cadena de Actuator, así que no interfiere con el login de usuarios de la base.
+Las credenciales salen de `MANAGEMENT_USER` / `MANAGEMENT_PASSWORD` (`monitoring.user` / `monitoring.password`). Si falta cualquiera, esa cadena falla cerrada con `401` y no recurre a credenciales por defecto. El proveedor se registra solo en el `AuthenticationManager` de la cadena de Actuator, así que no interfiere con el login de usuarios de la base. El indicador `mail` de Actuator está desactivado (`management.health.mail.enabled=false`) porque abría una conexión SMTP en cada consulta a `/actuator/health` y podía dejarla colgada; el envío real conserva sus propios timeouts.
 
 ## 4. Dominio y flujo de autenticación
 
@@ -185,8 +189,8 @@ Las credenciales salen de `MANAGEMENT_USER` / `MANAGEMENT_PASSWORD` (`monitoring
 - `PasswordResetToken` se almacena en `auth_schema.password_reset_tokens`, asociado a un usuario, con vencimiento, marca de uso y dirección IP.
 - `AuthService` gestiona inicio/registro, JWT, actualización del perfil, carga del avatar, recuperación de contraseña y los logins sociales con Google (`loginWithGoogle`, verifica el `id_token`) y con Facebook (`loginWithFacebook`, verifica el access token con `debug_token`). Ambos comparten `loginWithSocialUser`, que crea o vincula la cuenta reutilizando el correo existente. `EmailService` construye el enlace usando `app.frontend.url` y envía el correo por SMTP cuando está configurado.
 - `Product` mapea `store_schema.products` (clave UUID) y `Category` mapea `store_schema.categories`; ambos forman el catálogo real que consume la tienda. `ProductService` sube la imagen a Cloudinary, autogenera `sku`/`slug` si faltan y resuelve el nombre de la categoría para la respuesta. `CategoryService` impide borrar una categoría con productos asociados.
-- `PackageService` registra, lista y busca paquetes en `package_schema.packages` con `JdbcTemplate`. Genera `tracking_code` en Java (prefijo `NX-` más 27 caracteres hexadecimales); el remitente se toma del usuario autenticado y su nombre/teléfono se consultan desde `auth_schema.users`. La descripción del paquete no se acepta ni persiste porque no existe en la tabla administrada.
-- `SecurityConfig` permite sin token `POST` de auth y los `GET` del catálogo; el resto exige autenticación. La autorización fina de las escrituras del catálogo público se hace con `@PreAuthorize("hasRole('ADMIN')")` (method security habilitada); las rutas `/admin/**` se autorizan por prefijo en `SecurityConfig` (`hasRole('ADMIN')`), sin anotaciones en cada método. El **CORS tiene una sola fuente**: `CorsConfig`, que expone el bean `CorsConfigurationSource` que consume `SecurityConfig` (`cors(Customizer.withDefaults())`); los orígenes salen de `app.cors.allowed-origins` / `CORS_ALLOWED_ORIGINS` (lista separada por comas, admite patrones como `https://*.onrender.com`) y por defecto permiten `localhost:3000`, `localhost:3001` y `127.0.0.1:3000`. `TrackingController` expone el historial en `GET /tracking/{orderId}` (público) y el registro de eventos en `POST /tracking` (ADMIN); `PackageController` expone el registro, listado y búsqueda en `/v1/packages` para usuarios autenticados, y la regla `permitAll` de `/packages/**` no coincide con esas rutas.
+- `PackageService` registra, lista y busca paquetes en `package_schema.packages` con `JdbcTemplate`. Genera `tracking_code` en Java (prefijo `NX-` más 27 caracteres hexadecimales); el remitente se toma del usuario autenticado y su nombre/teléfono se consultan desde `auth_schema.users`. La descripción del paquete no se acepta ni persiste porque no existe en la tabla administrada. `PackageTrackingService` añade la consulta pública por código de guía y sintetiza el evento `REGISTRADO` cuando `package_schema.tracking_events` todavía no tiene filas.
+- `SecurityConfig` permite sin token `POST` de auth y los `GET` del catálogo; el resto exige autenticación. La autorización fina de las escrituras del catálogo público se hace con `@PreAuthorize("hasRole('ADMIN')")` (method security habilitada); las rutas `/admin/**` se autorizan por prefijo en `SecurityConfig` (`hasRole('ADMIN')`), sin anotaciones en cada método. El **CORS tiene una sola fuente**: `CorsConfig`, que expone el bean `CorsConfigurationSource` que consume `SecurityConfig` (`cors(Customizer.withDefaults())`); los orígenes salen de `app.cors.allowed-origins` / `CORS_ALLOWED_ORIGINS` (lista separada por comas, admite patrones como `https://*.onrender.com`) y por defecto permiten `localhost:3000`, `localhost:3001` y `127.0.0.1:3000`. `TrackingController` expone el historial en `GET /tracking/{orderId}` (público) y el registro de eventos en `POST /tracking` (ADMIN); `PackageTrackingController` expone el seguimiento público de paquetes en `GET /v1/tracking/{trackingCode}`; `PackageController` expone el registro, listado y búsqueda en `/v1/packages` para usuarios autenticados, y la regla `permitAll` de `/packages/**` no coincide con esas rutas.
 
 ## 5. Configuración y operación
 
