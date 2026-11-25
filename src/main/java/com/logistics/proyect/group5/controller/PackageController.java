@@ -2,16 +2,19 @@ package com.logistics.proyect.group5.controller;
 
 import com.logistics.proyect.group5.dto.CreatePackageRequest;
 import com.logistics.proyect.group5.dto.PackageResponse;
+import com.logistics.proyect.group5.dto.UpdatePackageStatusRequest;
 import com.logistics.proyect.group5.model.User;
 import com.logistics.proyect.group5.service.PackageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/packages")
@@ -37,5 +40,22 @@ public class PackageController {
     @GetMapping("/track/{trackingCode}")
     public ResponseEntity<PackageResponse> findByTrackingCode(@PathVariable String trackingCode) {
         return ResponseEntity.ok(packageService.findByTrackingCode(trackingCode));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<PackageResponse> findById(@PathVariable UUID id) {
+        return ResponseEntity.ok(packageService.findById(id));
+    }
+
+    /**
+     * Solo operadores pueden cambiar el estado de un envío. El evento queda
+     * registrado en el historial público de tracking.
+     */
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('ADMIN','REPARTIDOR')")
+    public ResponseEntity<PackageResponse> updateStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdatePackageStatusRequest request) {
+        return ResponseEntity.ok(packageService.updateStatus(id, request));
     }
 }

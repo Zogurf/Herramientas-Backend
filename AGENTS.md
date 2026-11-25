@@ -144,7 +144,11 @@ El formulario de inventario no envía slug: las altas generan uno único a parti
 |---|---|---|---|
 | `POST` | `/api/v1/packages` | autenticado | Registrar un paquete; el remitente se vincula al usuario autenticado (`201`) |
 | `GET` | `/api/v1/packages` | autenticado | Listar y filtrar por `search` (código, remitente o destinatario) y `status` |
+| `GET` | `/api/v1/packages/{id}` | autenticado | Consultar un paquete por UUID |
 | `GET` | `/api/v1/packages/track/{trackingCode}` | autenticado | Consultar un paquete por código de seguimiento |
+| `PATCH` | `/api/v1/packages/{id}/status` | ADMIN o REPARTIDOR | Cambiar el estado y registrar el evento en el historial público |
+
+`PATCH /v1/packages/{id}/status` recibe `newStatus`, `location` y `notes` (el id va en la ruta y el DTO rechaza campos desconocidos). El servicio valida el estado contra el enum, actualiza `current_status` y `updated_at`, e inserta un evento en `package_schema.tracking_events`; si falta `location` usa la ciudad de origen del envío. Así el cambio se refleja de inmediato en `GET /v1/tracking/{trackingCode}`.
 
 Los controladores devuelven `ResponseEntity`. El registro responde `201 CREATED`; las consultas y acciones satisfactorias responden `200 OK`; los borrados, `204 NO CONTENT`.
 

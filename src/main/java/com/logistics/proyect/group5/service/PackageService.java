@@ -2,6 +2,7 @@ package com.logistics.proyect.group5.service;
 
 import com.logistics.proyect.group5.dto.CreatePackageRequest;
 import com.logistics.proyect.group5.dto.PackageResponse;
+import com.logistics.proyect.group5.dto.UpdatePackageStatusRequest;
 import com.logistics.proyect.group5.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -106,6 +107,59 @@ public class PackageService {
                 .stream()
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Envío no encontrado."));
+    }
+
+    public PackageResponse findById(UUID id) {
+        if (id == null) {
+            throw new IllegalArgumentException("El identificador del envío es obligatorio.");
+        }
+
+        return jdbc.query(PACKAGE_SELECT + " WHERE p.id = ?", PACKAGE_ROW_MAPPER, id)
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Envío no encontrado."));
+    }
+
+    /**
+     * Actualiza el estado del paquete y deja el evento en el historial público.
+     * {@code tracking_events.location} es obligatorio: si el cliente no envía
+     * una ubicación se usa la ciudad de origen del envío.
+     */
+    @Transactional
+    public PackageResponse updateStatus(UUID id, UpdatePackageStatusRequest request) {
+        String status = normalizeStatus(request.newStatus());
+        PackageResponse current = findById(id);
+        String location = request.location() == null || request.location().isBlank()
+                ? current.originCity()
+                : request.location().trim();
+        String notes = request.notes() == null || request.notes().isBlank()
+                ? null
+                : request.notes().trim();
+
+        jdbc.update("""
+                UPDATE package_schema.packages
+                SET current_status = CAST(? AS package_schema.package_status),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """, status, id);
+        jdbc.update("""
+                INSERT INTO package_schema.tracking_events
+                    (package_id, status, location, description)
+                VALUES (?, CAST(? AS package_schema.package_status), ?, ?)
+                """, id, status, location, notes);
+
+        return findById(id);
+    }
+
+    private static String normalizeStatus(String status) {
+        if (status == null || status.isBlank()) {
+            throw new IllegalArgumentException("El estado del envío es obligatorio.");
+        }
+        String normalized = status.trim().toUpperCase(Locale.ROOT);
+        if (!PACKAGE_STATUSES.contains(normalized)) {
+            throw new IllegalArgumentException("Estado de envío no válido.");
+        }
+        return normalized;
     }
 
     static String generateTrackingCode() {
