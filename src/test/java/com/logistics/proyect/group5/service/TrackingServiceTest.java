@@ -59,4 +59,34 @@ class TrackingServiceTest {
         assertEquals(orderId, timeline.getFirst().getOrderId());
         assertEquals("ENTREGADO", timeline.getFirst().getStatus());
     }
+
+    @Test
+    void rejectsUnknownStatusBeforeSaving() {
+        UUID orderId = UUID.randomUUID();
+        when(orders.findById(orderId)).thenReturn(Optional.of(Order.builder().id(orderId).build()));
+        TrackingRequest request = new TrackingRequest();
+        request.setOrderId(orderId);
+        request.setStatus("PERDIDO");
+
+        assertThrows(IllegalArgumentException.class, () -> service.registerEvent(request));
+        verify(events, never()).save(any(TrackingEvent.class));
+    }
+
+    @Test
+    void normalizesStatusAndTrimsOptionalFields() {
+        UUID orderId = UUID.randomUUID();
+        when(orders.findById(orderId)).thenReturn(Optional.of(Order.builder().id(orderId).build()));
+        when(events.save(any(TrackingEvent.class))).thenAnswer(call -> call.getArgument(0));
+        TrackingRequest request = new TrackingRequest();
+        request.setOrderId(orderId);
+        request.setStatus(" en_ruta ");
+        request.setLocation("  Lima Norte  ");
+        request.setDescription("   ");
+
+        var result = service.registerEvent(request);
+
+        assertEquals("EN_RUTA", result.getStatus());
+        assertEquals("Lima Norte", result.getLocation());
+        assertNull(result.getDescription());
+    }
 }

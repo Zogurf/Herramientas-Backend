@@ -36,15 +36,14 @@ public class AdminCategoryController {
 
     @PostMapping
     public ResponseEntity<CategoryResponse> create(@Valid @RequestBody CategoryRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(toResponse(categoryService.create(toEntity(request))));
+        return ResponseEntity.status(HttpStatus.CREATED).body(categoryService.create(request));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<CategoryResponse> update(
             @PathVariable Integer id,
             @Valid @RequestBody CategoryRequest request) {
-        return ResponseEntity.ok(toResponse(categoryService.update(id, toEntity(request))));
+        return ResponseEntity.ok(categoryService.update(id, request));
     }
 
     @PatchMapping("/{id}/deactivate")
@@ -56,18 +55,6 @@ public class AdminCategoryController {
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
         categoryService.delete(id);
         return ResponseEntity.noContent().build();
-    }
-
-    private Category toEntity(CategoryRequest request) {
-        return Category.builder()
-                .name(request.getName())
-                .slug(request.getSlug())
-                .description(request.getDescription())
-                .parent(request.getParentId() == null
-                        ? null
-                        : Category.builder().id(request.getParentId()).build())
-                .active(request.getActive() == null || request.getActive())
-                .build();
     }
 
     private CategoryResponse toResponse(Category category) {

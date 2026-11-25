@@ -9,11 +9,11 @@ on:
 
 permissions:
   contents: read
-  
+
 concurrency:
   group: backend-deploy-dev
   cancel-in-progress: false
-    
+
 jobs:
   deploy:
     name: Deploy to Render

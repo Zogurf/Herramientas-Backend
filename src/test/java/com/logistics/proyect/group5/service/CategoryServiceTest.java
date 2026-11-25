@@ -1,6 +1,7 @@
 package com.logistics.proyect.group5.service;
 
 import com.logistics.proyect.group5.model.Category;
+import com.logistics.proyect.group5.exception.ResourceNotFoundException;
 import com.logistics.proyect.group5.repository.CategoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -103,5 +105,32 @@ class CategoryServiceTest {
 
         assertTrue(exception.getMessage().contains("no puede ser su propia categoría padre"));
         verify(categoryRepository, never()).save(any());
+    }
+
+    @Test
+    void missingCategoryMapsToNotFound() {
+        when(categoryRepository.findById(999)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> categoryService.findById(999));
+    }
+
+    @Test
+    void publicListOnlyReturnsActiveCategories() {
+        when(categoryRepository.findByActiveTrueOrderByNameAsc()).thenReturn(List.of(
+                Category.builder().id(1).name("Activa").slug("activa").active(true).build()));
+
+        var result = categoryService.list();
+
+        assertEquals(1, result.size());
+        assertTrue(result.getFirst().getIsActive());
+    }
+
+    @Test
+    void publicGetHidesInactiveCategories() {
+        Category inactive = Category.builder()
+                .id(2).name("Retirada").slug("retirada").active(false).build();
+        when(categoryRepository.findById(2)).thenReturn(Optional.of(inactive));
+
+        assertThrows(ResourceNotFoundException.class, () -> categoryService.get(2));
     }
 }

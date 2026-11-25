@@ -3,6 +3,7 @@ package com.logistics.proyect.group5.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.logistics.proyect.group5.dto.CreatePackageRequest;
 import com.logistics.proyect.group5.dto.PackageResponse;
+import com.logistics.proyect.group5.dto.UpdatePackageStatusRequest;
 import com.logistics.proyect.group5.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -135,6 +137,56 @@ class PackageServiceTest {
     }
 
     @Test
+    void findByIdMapsPackageAndMissingIdIsNotFound() throws Exception {
+        UUID id = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.parse("2026-11-19T20:00:00Z");
+        when(jdbc.query(contains("WHERE p.id = ?"), anyRowMapper(), eq(id)))
+                .thenAnswer(invocation -> List.of(rowMapper(invocation).mapRow(
+                        packageResultSet(id, "NX-ABC", now), 1)));
+
+        PackageResponse response = packageService.findById(id);
+
+        assertEquals(id, response.id());
+        assertEquals("NX-ABC", response.trackingCode());
+
+        UUID missing = UUID.randomUUID();
+        when(jdbc.query(contains("WHERE p.id = ?"), anyRowMapper(), eq(missing)))
+                .thenReturn(List.of());
+
+        ResourceNotFoundException error = assertThrows(
+                ResourceNotFoundException.class, () -> packageService.findById(missing));
+        assertEquals("Envío no encontrado.", error.getMessage());
+    }
+
+    @Test
+    void updateStatusWritesPackageAndTrackingEvent() throws Exception {
+        UUID id = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.parse("2026-11-19T20:00:00Z");
+        when(jdbc.query(contains("WHERE p.id = ?"), anyRowMapper(), eq(id)))
+                .thenAnswer(invocation -> List.of(rowMapper(invocation).mapRow(
+                        packageResultSet(id, "NX-ABC", now, "EN_TRANSITO"), 1)));
+
+        PackageResponse response = packageService.updateStatus(id,
+                new UpdatePackageStatusRequest(" en_transito ", " Hub Lima ", " Salida del almacén "));
+
+        assertEquals("EN_TRANSITO", response.status());
+        verify(jdbc).update(contains("UPDATE package_schema.packages"),
+                eq("EN_TRANSITO"), eq(id));
+        verify(jdbc).update(contains("INSERT INTO package_schema.tracking_events"),
+                eq(id), eq("EN_TRANSITO"), eq("Hub Lima"), eq("Salida del almacén"));
+    }
+
+    @Test
+    void updateStatusRejectsUnknownStatusWithoutTouchingDatabase() {
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> packageService.updateStatus(UUID.randomUUID(),
+                        new UpdatePackageStatusRequest("PERDIDO", null, null)));
+
+        assertEquals("Estado de envío no válido.", error.getMessage());
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
     void generatedTrackingCodesFitDatabaseColumn() {
         String trackingCode = PackageService.generateTrackingCode();
 
@@ -176,6 +228,11 @@ class PackageServiceTest {
 
     private static ResultSet packageResultSet(UUID id, String trackingCode, OffsetDateTime now)
             throws Exception {
+        return packageResultSet(id, trackingCode, now, "REGISTRADO");
+    }
+
+    private static ResultSet packageResultSet(UUID id, String trackingCode, OffsetDateTime now,
+            String status) throws Exception {
         ResultSet rs = mock(ResultSet.class);
         when(rs.getObject("id", UUID.class)).thenReturn(id);
         when(rs.getString("tracking_code")).thenReturn(trackingCode);
@@ -187,7 +244,7 @@ class PackageServiceTest {
         when(rs.getString("destination_city")).thenReturn("Arequipa");
         when(rs.getString("destination_address")).thenReturn("Av. Central 123");
         when(rs.getBigDecimal("weight_kg")).thenReturn(new BigDecimal("12.50"));
-        when(rs.getString("status")).thenReturn("REGISTRADO");
+        when(rs.getString("status")).thenReturn(status);
         when(rs.getObject("created_at", OffsetDateTime.class)).thenReturn(now);
         when(rs.getObject("updated_at", OffsetDateTime.class)).thenReturn(now);
         return rs;

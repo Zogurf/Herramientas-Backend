@@ -18,7 +18,8 @@ services:
     branch: dev
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    autoDeployTrigger: commit # Redeploy automático con cada push a `dev`.
+    # El deploy lo dispara `.github/workflows/deploy.yml` solo si Backend CI pasa.
+    autoDeployTrigger: 'off'
 
     # Sonda de Render: usa el grupo de liveness de Actuator, no el estado global.
     # /health devuelve 503 si la base de datos no responde, y Render reiniciaría
@@ -87,16 +88,25 @@ services:
         value: v26.0
 
       # ---------------------------------------------------------------------
-      # SMTP de Gmail — recuperación de contraseña
+      # Correo transaccional — recuperación de contraseña
       # ---------------------------------------------------------------------
-      # ⚠️ El plan Free de Render bloquea los puertos de salida 25, 465 y 587,
-      #    y Gmail usa el 587: el correo NO se enviará. Además EmailService
-      #    absorbe el fallo, así que el endpoint igualmente responde 200 y
-      #    parecería que funcionó. Solución: proveedor por API HTTP
-      #    (Resend, Brevo, SendGrid) o subir a un plan con puertos abiertos.
+      # ⚠️ El plan Free de Render bloquea los puertos de salida 25, 465 y 587.
+      #    Por eso se usa Brevo por el puerto 2525 (STARTTLS), que sí está
+      #    permitido. Crea una cuenta gratuita en Brevo, verifica el correo
+      #    remitente y genera una clave SMTP en Settings → SMTP & API.
+      #    MAIL_USERNAME = login de Brevo; MAIL_PASSWORD = clave SMTP;
+      #    MAIL_FROM = correo remitente verificado.
+      - key: MAIL_HOST
+        value: smtp-relay.brevo.com
+      - key: MAIL_PORT
+        value: "2525"
+      - key: MAIL_SSL_TRUST
+        value: smtp-relay.brevo.com
       - key: MAIL_USERNAME
         sync: false
       - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_FROM
         sync: false
 
       # ---------------------------------------------------------------------

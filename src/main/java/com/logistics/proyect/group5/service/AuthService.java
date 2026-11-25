@@ -60,7 +60,7 @@ public class AuthService {
 
     public AuthResponse login(LoginRequest request) {
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+                new UsernamePasswordAuthenticationToken(normalizeEmail(request.getEmail()), request.getPassword())
         );
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -77,15 +77,19 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
+        String email = normalizeEmail(request.getEmail());
+        String fullName = normalizeFullName(request.getFullName());
+        String phone = normalizePhone(request.getPhone());
+
+        if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new IllegalArgumentException("El correo electrónico ya se encuentra registrado.");
         }
 
         User user = User.builder()
-                .fullName(request.getFullName())
-                .email(request.getEmail())
+                .fullName(fullName)
+                .email(email)
                 .password(passwordEncoder.encode(request.getPassword()))
-                .phone(request.getPhone())
+                .phone(phone)
                 .role(UserRole.CLIENTE)
                 .provider(AuthProvider.LOCAL)
                 .enabled(true)
@@ -124,7 +128,7 @@ public class AuthService {
 
     @Transactional
     public void forgotPassword(ForgotPasswordRequest request, String ipAddress) {
-        Optional<User> userOptional = userRepository.findByEmail(request.getEmail().trim().toLowerCase());
+        Optional<User> userOptional = userRepository.findByEmailIgnoreCase(normalizeEmail(request.getEmail()));
         if (userOptional.isEmpty()) {
             log.info("[AUTH SERVICE] Solicitud de recuperación para correo no registrado: {}", request.getEmail());
             return;
@@ -176,16 +180,21 @@ public class AuthService {
         User user = userRepository.findById(currentUser.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
 
-        if (request.getFullName() != null && !request.getFullName().trim().isBlank()) {
-            user.setFullName(request.getFullName().trim());
+        if (request.getFullName() != null) {
+            String fullName = normalizeFullName(request.getFullName());
+            if (!fullName.isBlank()) {
+                user.setFullName(fullName);
+            }
         }
 
         if (request.getPhone() != null) {
-            user.setPhone(request.getPhone().trim());
+            // Un teléfono vacío limpia el dato en vez de guardar una cadena vacía.
+            user.setPhone(normalizePhone(request.getPhone()));
         }
 
-        if (request.getAvatarUrl() != null && !request.getAvatarUrl().trim().isBlank()) {
-            user.setAvatarUrl(request.getAvatarUrl().trim());
+        if (request.getAvatarUrl() != null) {
+            String avatarUrl = request.getAvatarUrl().trim();
+            user.setAvatarUrl(avatarUrl.isBlank() ? null : avatarUrl);
         }
 
         User updatedUser = userRepository.save(user);
@@ -270,14 +279,21 @@ public class AuthService {
      */
     private AuthResponse loginWithSocialUser(AuthProvider provider, String providerId, String email,
                                              String name, String picture, String providerLabel) {
-        Optional<User> existingUser = userRepository.findByEmail(email);
+        email = normalizeEmail(email);
+        String safeName = normalizeFullName(name);
+        String safePicture = picture == null ? null : picture.trim();
+        if (safePicture != null && safePicture.length() > 255) {
+            safePicture = null;
+        }
+
+        Optional<User> existingUser = userRepository.findByEmailIgnoreCase(email);
         User user;
 
         if (existingUser.isPresent()) {
             user = existingUser.get();
             // Rellena el avatar solo si el usuario aún no tiene uno propio.
-            if ((user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) && picture != null) {
-                user.setAvatarUrl(picture);
+            if ((user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) && safePicture != null) {
+                user.setAvatarUrl(safePicture);
             }
             // Migra el proveedor si la cuenta se había creado con correo y contraseña.
             if (user.getProvider() == AuthProvider.LOCAL) {
@@ -289,10 +305,10 @@ public class AuthService {
             log.info("[AUTH SERVICE] Login con {} exitoso (usuario existente): {}", providerLabel, email);
         } else {
             user = User.builder()
-                    .fullName(name != null && !name.isBlank() ? name : email.split("@")[0])
+                    .fullName(safeName.isBlank() ? email.split("@")[0] : safeName)
                     .email(email)
                     .password(passwordEncoder.encode(UUID.randomUUID().toString()))
-                    .avatarUrl(picture)
+                    .avatarUrl(safePicture)
                     .provider(provider)
                     .providerId(providerId)
                     .role(UserRole.CLIENTE)
@@ -311,6 +327,30 @@ public class AuthService {
                 .user(mapToUserSummaryDto(user))
                 .build();
     }
+
+    /** Normaliza el correo para que la búsqueda y el login sean consistentes. */
+    private String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** Recorta el nombre y limita el tamaño que acepta la columna. */
+    private String normalizeFullName(String fullName) {
+        if (fullName == null) {
+            return "";
+        }
+        String normalized = fullName.trim().replaceAll("\\s+", " ");
+        return normalized.length() > 150 ? normalized.substring(0, 150) : normalized;
+    }
+
+    /** Un teléfono vacío se guarda como NULL, no como cadena vacía. */
+    private String normalizePhone(String phone) {
+        if (phone == null) {
+            return null;
+        }
+        String normalized = phone.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> verifyGoogleToken(String idToken) {
